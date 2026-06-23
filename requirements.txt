@@ -1,0 +1,11 @@
+# Core (always required) — the system runs end to end on numpy alone using
+# deterministic fallback embedders, so you can try it with zero model downloads.
+numpy>=1.21
+
+# Optional extras — install what you need (see pyproject.toml for groups):
+#   pip install -e ".[text]"     real text embeddings (sentence-transformers)
+#   pip install -e ".[vision]"   real vision embeddings (Qwen-VL / transformers)
+#   pip install -e ".[render]"   screenshot + PDF rendering (playwright, pymupdf)
+#   pip install -e ".[serve]"    FastAPI search server
+#   pip install -e ".[faiss]"    FAISS-backed vector store
+#   pip install -e ".[all]"      everything

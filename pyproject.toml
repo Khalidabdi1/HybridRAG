@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hybridrag"
+version = "0.1.0"
+description = "Hybrid Retrieval-Augmented Generation: fuse text RAG and pixel (vision) RAG into one searchable index."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "HybridRAG contributors" }]
+keywords = ["rag", "retrieval", "vision", "vlm", "embeddings", "search", "multimodal"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# The core runs on numpy alone (deterministic fallback embedders), so it is
+# installable and testable anywhere. Heavy models are opt-in extras.
+dependencies = [
+    "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+text = ["sentence-transformers>=2.2"]
+vision = ["torch>=2.0", "transformers>=4.40", "pillow>=9.0"]
+render = ["playwright>=1.40", "pillow>=9.0", "pymupdf>=1.23"]
+serve = ["fastapi>=0.110", "uvicorn>=0.27", "pydantic>=2.0"]
+faiss = ["faiss-cpu>=1.7"]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+all = [
+    "sentence-transformers>=2.2",
+    "torch>=2.0",
+    "transformers>=4.40",
+    "pillow>=9.0",
+    "playwright>=1.40",
+    "pymupdf>=1.23",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.0",
+    "faiss-cpu>=1.7",
+]
+
+[project.scripts]
+hybridrag = "hybridrag.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Khalidabdi1/HybridRAG"
+Issues = "https://github.com/Khalidabdi1/HybridRAG/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
