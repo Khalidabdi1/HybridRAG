@@ -15,9 +15,15 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
 - [x] FastAPI search server
 - [x] pytest suite that runs on numpy alone
 
+## Done (v0.2.0)
+- [x] **Evaluation harness** (`hybridrag.eval`) — compare text-only vs
+      pixel-only vs hybrid on one corpus: recall@k, precision@k, nDCG@k, hit@k,
+      MRR, latency, and index footprint, via the `hybridrag eval` CLI. JSON
+      dataset format with binary/graded qrels + a built-in offline sample.
+
 ## Next
-- [ ] **Evaluation harness** — compare text-only vs pixel-only vs hybrid on the
-      same corpus (recall@k, nDCG, latency, $/query, storage).
+- [ ] **Per-query cost model** — extend the harness with $/query and storage
+      projections (vector + screenshot bytes) across modalities.
 - [ ] **Cross-encoder reranking** of the fused candidate set.
 - [ ] **Qwen-VL embedding adapter** with batched GPU inference.
 - [ ] **Async / batched ingestion** for large corpora.

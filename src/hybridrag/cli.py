@@ -112,6 +112,31 @@ def _cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_eval(args: argparse.Namespace) -> int:
+    from .eval import build_engine, evaluate, sample_dataset
+    from .eval.dataset import EvalDataset
+
+    if args.dataset:
+        dataset = EvalDataset.from_file(args.dataset)
+    else:
+        dataset = sample_dataset()
+
+    config = HybridConfig(
+        text_model=args.text_model,
+        vision_model=args.vision_model,
+    )
+    engine = build_engine(dataset, config)
+    ks = [int(x) for x in args.k.split(",") if x.strip()]
+    modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    report = evaluate(engine, dataset.queries, ks=ks, modes=modes, dataset_name=dataset.name)
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(report.table(primary_k=args.primary_k))
+    return 0
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -162,6 +187,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("stats", help="print index stats")
     add_storage(sp)
     sp.set_defaults(func=_cmd_stats)
+
+    sp = sub.add_parser("eval", help="compare text/vision/hybrid retrieval on a dataset")
+    sp.add_argument("--dataset", help="dataset JSON file (default: built-in sample)")
+    sp.add_argument("--text-model", default="hash", help='text encoder id (default "hash")')
+    sp.add_argument("--vision-model", default="hash", help='vision encoder id (default "hash")')
+    sp.add_argument("-k", default="1,3,5,10", help="comma-separated cutoffs")
+    sp.add_argument("--primary-k", type=int, help="k used for the printed table (default: max)")
+    sp.add_argument("--modes", default="text,vision,hybrid", help="comma-separated modes")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_eval)
 
     sp = sub.add_parser("serve", help="serve a search API (needs [serve])")
     add_storage(sp)

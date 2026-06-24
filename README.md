@@ -141,6 +141,69 @@ hybridrag stats      --storage .idx
 # Serve a search API (needs [serve])
 hybridrag serve      --storage .idx --port 8000
 #  GET /search?q=...&k=5   ·   POST /search {"query": "...", "top_k": 5}
+
+# Benchmark text-only vs vision-only vs hybrid on a dataset
+hybridrag eval       --dataset examples/datasets/sample.json -k 1,5,10
+```
+
+## Evaluation
+
+The whole HybridRAG thesis is empirical: *does* fusing pixels with text help, and
+what does it cost? The built-in harness answers that on **your** corpus with
+standard ranking metrics (recall@k, precision@k, nDCG@k, hit@k, MRR), measured
+latency, and the index footprint — for each modality side by side.
+
+```bash
+hybridrag eval                 # runs the built-in offline sample
+```
+
+```
+Dataset: hybridrag-sample   metrics @k=10   (text_units=12, vision_units=0)
+mode    recall  prec   nDCG   hit    MRR    ms/q  units
+------  ------  -----  -----  -----  -----  ----  -----
+text    0.917   0.092  0.804  0.917  0.767  0.10  12
+vision  0.000   0.000  0.000  0.000  0.000  0.00  0
+hybrid  0.917   0.092  0.804  0.917  0.767  0.10  12
+  note[vision]: no indexed units for this modality — skipped
+```
+
+The built-in sample is intentionally **text-only** so it runs with numpy alone —
+it measures a lexical baseline and proves the harness end to end. To get a real
+three-way comparison, point it at a dataset with `image_path` documents and turn
+on real encoders:
+
+```bash
+hybridrag eval --dataset my_corpus.json \
+  --text-model sentence-transformers/all-MiniLM-L6-v2 \
+  --vision-model openai/clip-vit-base-patch32 \
+  -k 1,5,10 --json
+```
+
+Datasets are plain JSON — a corpus plus relevance judgements (`qrels`):
+
+```json
+{
+  "name": "my_corpus",
+  "documents": [
+    {"doc_id": "d1", "text": "Python raises ZeroDivisionError when ..."},
+    {"doc_id": "d2", "image_path": "tiles/revenue_chart.png"}
+  ],
+  "queries": [
+    {"id": "q1", "query": "divide by zero error", "relevant": {"d1": 1.0}},
+    {"id": "q2", "query": "quarterly revenue chart", "relevant": ["d2"]}
+  ]
+}
+```
+
+Relevance may be binary (`["d2"]`) or graded (`{"d1": 2.0, "d2": 1.0}`, used by
+nDCG). The same API is available in Python:
+
+```python
+from hybridrag.eval import evaluate, build_engine, EvalDataset
+
+ds = EvalDataset.from_file("my_corpus.json")
+report = evaluate(build_engine(ds), ds.queries, ks=(1, 5, 10))
+print(report.table())
 ```
 
 ## How it works
@@ -181,10 +244,12 @@ src/hybridrag/
 ├── index/              # VectorStore (numpy / FAISS)
 ├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile)
 ├── retrieve/           # router (per-query weights) + fusion (RRF)
+├── eval/               # metrics, datasets, harness (text vs vision vs hybrid)
 ├── serve/              # FastAPI search API
 └── cli.py              # `hybridrag` command
 tests/                  # pytest suite (runs on numpy alone)
 examples/quickstart.py  # end-to-end demo
+examples/datasets/      # sample evaluation dataset (JSON)
 ```
 
 ## Development
@@ -198,9 +263,10 @@ ruff check .
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md). Near-term: cross-encoder reranking of fused
-results, async batched ingestion, an evaluation harness comparing
-text-only / pixel-only / hybrid on the same corpus, and a real Qwen-VL
-embedding adapter.
+results, async batched ingestion, incremental updates/deletes keyed by
+`doc_id`, and a real Qwen-VL embedding adapter. The
+[evaluation harness](#evaluation) (text-only / pixel-only / hybrid on one
+corpus) landed in v0.2.
 
 ## Acknowledgements
 

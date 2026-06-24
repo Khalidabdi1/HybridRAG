@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hybridrag"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hybrid Retrieval-Augmented Generation: fuse text RAG and pixel (vision) RAG into one searchable index."
 readme = "README.md"
 requires-python = ">=3.9"

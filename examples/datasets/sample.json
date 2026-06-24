@@ -1,0 +1,175 @@
+{
+  "name": "hybridrag-sample",
+  "documents": [
+    {
+      "doc_id": "py_zipdiv",
+      "text": "A ZeroDivisionError is raised in Python when code divides an integer or float by zero. The traceback points at the offending line; guard the denominator or catch the exception with a try/except block.",
+      "title": "Python ZeroDivisionError traceback when dividing by zero",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "json_parse",
+      "text": "json.loads raises a JSONDecodeError when the input string is not valid JSON. Common causes are trailing commas, single quotes, and unescaped control characters. Validate the payload before decoding.",
+      "title": "Parsing malformed JSON and handling decode errors",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "sql_index",
+      "text": "A slow SQL query that filters on an unindexed column forces a full table scan. Adding a B-tree index on the WHERE clause column lets the database seek directly to matching rows and cuts query latency.",
+      "title": "Speeding up slow SQL queries with indexes",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "regex_email",
+      "text": "A pragmatic email regex matches a local part, an at sign, a domain, and a top-level domain. Overly strict patterns reject valid addresses; prefer a lenient regex plus a confirmation email.",
+      "title": "Writing a regular expression to validate email addresses",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "http_429",
+      "text": "An HTTP 429 status code means the client has sent too many requests in a given window. Respect the Retry-After header and back off exponentially to stay under the API rate limit.",
+      "title": "HTTP 429 Too Many Requests and rate limiting",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "revenue_chart",
+      "text": "The bar chart plots quarterly revenue by region. Each colored bar is a region and the vertical axis is revenue in millions. The legend maps colors to regions; growth is steepest in the rightmost quarter.",
+      "title": "Quarterly revenue chart showing growth across regions",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "org_diagram",
+      "text": "The org chart diagram shows the reporting hierarchy as boxes connected by lines. The CEO sits at the top, with VPs below and teams branching out. The layout makes the management structure visible at a glance.",
+      "title": "Organizational chart diagram of reporting structure",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "pricing_table",
+      "text": "The pricing table lays out three subscription tiers in columns: Free, Pro, and Enterprise. Rows list features and a check mark or dash shows which tier includes each feature. Prices appear in the table header.",
+      "title": "Pricing table comparing subscription tiers",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "docker_build",
+      "text": "Docker builds each instruction as a layer and caches it. Ordering the Dockerfile so that rarely changing steps come first maximizes cache hits and makes rebuilds fast after editing application code.",
+      "title": "Caching Docker layers to speed up image builds",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "git_rebase",
+      "text": "git rebase replays your commits on top of another branch, producing a linear history without merge commits. Interactive rebase lets you squash, reorder, and edit commits before pushing.",
+      "title": "Using git rebase to keep a linear commit history",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "k8s_oom",
+      "text": "A pod showing OOMKilled was terminated because it exceeded its memory limit. Raise the container memory limit, fix the leak, or add a request so the scheduler places the pod on a node with enough memory.",
+      "title": "Kubernetes pod killed with OOMKilled status",
+      "image_path": null,
+      "page": 0
+    },
+    {
+      "doc_id": "ssl_handshake",
+      "text": "An SSL handshake failure usually stems from a certificate mismatch, an expired certificate, or an unsupported cipher suite. Inspect the chain with openssl s_client and confirm the hostname matches the certificate.",
+      "title": "Debugging a TLS SSL handshake failure",
+      "image_path": null,
+      "page": 0
+    }
+  ],
+  "queries": [
+    {
+      "id": "q1",
+      "query": "how do I fix a divide by zero error in python",
+      "relevant": {
+        "py_zipdiv": 1.0
+      }
+    },
+    {
+      "id": "q2",
+      "query": "json decode error trailing comma",
+      "relevant": {
+        "json_parse": 1.0
+      }
+    },
+    {
+      "id": "q3",
+      "query": "my sql query is slow on a where clause",
+      "relevant": {
+        "sql_index": 1.0
+      }
+    },
+    {
+      "id": "q4",
+      "query": "regex to validate an email address",
+      "relevant": {
+        "regex_email": 1.0
+      }
+    },
+    {
+      "id": "q5",
+      "query": "api returns 429 too many requests rate limit",
+      "relevant": {
+        "http_429": 1.0
+      }
+    },
+    {
+      "id": "q6",
+      "query": "bar chart of quarterly revenue by region",
+      "relevant": {
+        "revenue_chart": 1.0
+      }
+    },
+    {
+      "id": "q7",
+      "query": "diagram of the org reporting structure",
+      "relevant": {
+        "org_diagram": 1.0
+      }
+    },
+    {
+      "id": "q8",
+      "query": "table comparing subscription pricing tiers",
+      "relevant": {
+        "pricing_table": 1.0
+      }
+    },
+    {
+      "id": "q9",
+      "query": "speed up docker image build with layer cache",
+      "relevant": {
+        "docker_build": 1.0
+      }
+    },
+    {
+      "id": "q10",
+      "query": "keep a linear git history with rebase",
+      "relevant": {
+        "git_rebase": 1.0
+      }
+    },
+    {
+      "id": "q11",
+      "query": "pod oomkilled exceeded memory limit kubernetes",
+      "relevant": {
+        "k8s_oom": 1.0
+      }
+    },
+    {
+      "id": "q12",
+      "query": "tls handshake failure certificate mismatch",
+      "relevant": {
+        "ssl_handshake": 1.0
+      }
+    }
+  ]
+}
