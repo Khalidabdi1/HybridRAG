@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hybridrag"
-version = "0.2.0"
+version = "0.3.0"
 description = "Hybrid Retrieval-Augmented Generation: fuse text RAG and pixel (vision) RAG into one searchable index."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -28,6 +28,7 @@ text = ["sentence-transformers>=2.2"]
 vision = ["torch>=2.0", "transformers>=4.40", "pillow>=9.0"]
 render = ["playwright>=1.40", "pillow>=9.0", "pymupdf>=1.23"]
 serve = ["fastapi>=0.110", "uvicorn>=0.27", "pydantic>=2.0"]
+mcp = ["mcp>=1.0", "anyio>=4.0"]
 faiss = ["faiss-cpu>=1.7"]
 dev = ["pytest>=7.0", "ruff>=0.4"]
 all = [
@@ -40,11 +41,14 @@ all = [
     "fastapi>=0.110",
     "uvicorn>=0.27",
     "pydantic>=2.0",
+    "mcp>=1.0",
+    "anyio>=4.0",
     "faiss-cpu>=1.7",
 ]
 
 [project.scripts]
 hybridrag = "hybridrag.cli:main"
+hybridrag-mcp = "hybridrag.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/Khalidabdi1/HybridRAG"

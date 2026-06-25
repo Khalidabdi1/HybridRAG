@@ -21,6 +21,14 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       MRR, latency, and index footprint, via the `hybridrag eval` CLI. JSON
       dataset format with binary/graded qrels + a built-in offline sample.
 
+## Done (v0.3.0)
+- [x] **MCP server + Claude skill** — `hybridrag.mcp_server` exposes
+      `hybridrag_search`, `hybridrag_add_text`, `hybridrag_add_html`, and
+      `hybridrag_stats` over the Model Context Protocol (`hybridrag-mcp`), with a
+      project-scoped `.mcp.json` and a `.claude/skills/hybridrag` skill so Claude
+      can index and search documents mid-conversation. Dependency-light handler
+      layer runs on numpy alone; the `mcp` runtime is an opt-in extra.
+
 ## Next
 - [ ] **Per-query cost model** — extend the harness with $/query and storage
       projections (vector + screenshot bytes) across modalities.

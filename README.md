@@ -146,6 +146,40 @@ hybridrag serve      --storage .idx --port 8000
 hybridrag eval       --dataset examples/datasets/sample.json -k 1,5,10
 ```
 
+## Use with Claude (MCP + Skill)
+
+HybridRAG ships an [MCP](https://modelcontextprotocol.io) server so Claude Code,
+Claude Desktop, or the Claude Agent SDK can index and search documents *during a
+conversation* — and a [Claude skill](.claude/skills/hybridrag/SKILL.md) that
+teaches Claude when and how to use it.
+
+```bash
+pip install -e ".[mcp]"        # installs the `mcp` runtime
+hybridrag-mcp                  # or: python -m hybridrag.mcp_server
+```
+
+The repo includes a project-scoped [`.mcp.json`](.mcp.json), so inside this
+directory Claude Code discovers the server automatically. To register it
+elsewhere:
+
+```bash
+claude mcp add hybridrag -- python -m hybridrag.mcp_server
+```
+
+The server exposes four tools over a persistent index (set by
+`$HYBRIDRAG_STORAGE`, default `.hybridrag_index`):
+
+| Tool | Purpose |
+| --- | --- |
+| `hybridrag_search` | Fused text+pixel search; force a modality with `modality`. |
+| `hybridrag_add_text` | Chunk and index a raw text document. |
+| `hybridrag_add_html` | Extract text from HTML, then chunk and index it. |
+| `hybridrag_stats` | Report index size, models, and dimensions. |
+
+The bundled **skill** (`.claude/skills/hybridrag/`) is picked up automatically by
+Claude Code in this repo; it tells Claude to prefer text-only retrieval for code,
+logs, and JSON, and to blend in pixels for tables, charts, and complex layouts.
+
 ## Evaluation
 
 The whole HybridRAG thesis is empirical: *does* fusing pixels with text help, and
@@ -246,7 +280,10 @@ src/hybridrag/
 ├── retrieve/           # router (per-query weights) + fusion (RRF)
 ├── eval/               # metrics, datasets, harness (text vs vision vs hybrid)
 ├── serve/              # FastAPI search API
+├── mcp_server.py       # MCP server for Claude (`hybridrag-mcp`)
 └── cli.py              # `hybridrag` command
+.claude/skills/hybridrag/  # Claude skill describing the engine
+.mcp.json               # project-scoped MCP server registration
 tests/                  # pytest suite (runs on numpy alone)
 examples/quickstart.py  # end-to-end demo
 examples/datasets/      # sample evaluation dataset (JSON)
@@ -265,6 +302,7 @@ ruff check .
 See [ROADMAP.md](ROADMAP.md). Near-term: cross-encoder reranking of fused
 results, async batched ingestion, incremental updates/deletes keyed by
 `doc_id`, and a real Qwen-VL embedding adapter. The
+[MCP server + Claude skill](#use-with-claude-mcp--skill) landed in v0.3; the
 [evaluation harness](#evaluation) (text-only / pixel-only / hybrid on one
 corpus) landed in v0.2.
 

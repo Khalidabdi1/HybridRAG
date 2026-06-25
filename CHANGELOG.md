@@ -3,6 +3,23 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] - 2026-06-25
+### Added
+- **MCP server** (`hybridrag.mcp_server`) exposing HybridRAG to Claude Code,
+  Claude Desktop, and the Claude Agent SDK over the Model Context Protocol.
+  - Tools: `hybridrag_search` (fused text+pixel search, optional forced
+    modality), `hybridrag_add_text`, `hybridrag_add_html`, `hybridrag_stats`.
+  - Dependency-light, unit-tested handler layer (`call_tool`) that runs on numpy
+    alone; the `mcp` runtime is an opt-in extra and `main()` degrades gracefully
+    with a clear install hint when it is absent.
+  - Persistent index keyed by `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`);
+    every mutating tool call saves.
+- `hybridrag-mcp` console entry point and `pip install -e ".[mcp]"` extra.
+- Project-scoped `.mcp.json` so Claude Code auto-discovers the server in-repo.
+- **Claude skill** at `.claude/skills/hybridrag/SKILL.md` describing when and how
+  to index/search and which modality to prefer.
+- Tests: `test_mcp_server.py`.
+
 ## [0.2.0] - 2026-06-24
 ### Added
 - Evaluation harness (`hybridrag.eval`) comparing text-only, vision-only, and
