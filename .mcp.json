@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "hybridrag": {
+      "command": "python",
+      "args": ["-m", "hybridrag.mcp_server"],
+      "env": {
+        "HYBRIDRAG_STORAGE": ".hybridrag_index"
+      }
+    }
+  }
+}

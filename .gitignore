@@ -25,6 +25,7 @@ data/
 *.npz
 storage/
 .hybridrag/
+.hybridrag_index/
 
 # Models / caches
 models/
