@@ -3,6 +3,26 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] - 2026-06-26
+### Added
+- **Incremental updates & deletes keyed by `doc_id`** — re-embed only the
+  document that changed instead of rebuilding the whole index, directly
+  addressing Pixel RAG's costly "change one line → re-screenshot/re-tile/
+  re-embed the page" update path.
+  - `VectorStore.delete_where()`, `delete_doc()`, and `doc_ids()` — predicate
+    deletion that compacts vectors + metadata and rebuilds the FAISS index from
+    the survivors.
+  - Engine: `HybridRAG.delete(doc_id)` (removes units across both modalities),
+    `upsert_text()` / `upsert_html()` (delete-then-add in place), and
+    `doc_ids()`.
+  - CLI: `hybridrag delete`, `hybridrag list-docs`, and a `--replace` (upsert)
+    flag on `add-text`.
+  - MCP tools: `hybridrag_delete`, `hybridrag_update_text`, and
+    `hybridrag_list_docs`.
+  - `stats()` now reports a `documents` count.
+  - Tests: delete/upsert coverage in `test_store.py`, `test_engine.py`, and
+    `test_mcp_server.py`.
+
 ## [0.3.0] - 2026-06-25
 ### Added
 - **MCP server** (`hybridrag.mcp_server`) exposing HybridRAG to Claude Code,

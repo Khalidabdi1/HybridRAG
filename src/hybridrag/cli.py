@@ -5,7 +5,10 @@ Examples::
     hybridrag add-text --storage .idx --id doc1 --file README.md --title Readme
     hybridrag ingest-url --storage .idx --id wiki --url https://example.com
     hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf
+    hybridrag add-text --storage .idx --id doc1 --file README.md --replace
     hybridrag search --storage .idx --query "revenue table" -k 5
+    hybridrag delete --storage .idx --id doc1
+    hybridrag list-docs --storage .idx
     hybridrag stats --storage .idx
     hybridrag serve --storage .idx --port 8000
 """
@@ -36,9 +39,47 @@ def _cmd_add_text(args: argparse.Namespace) -> int:
             text = fh.read()
     else:
         text = args.text or sys.stdin.read()
+    if args.replace:
+        result = engine.upsert_text(args.id, text, title=args.title or "")
+        n = result["chunks_added"]
+        engine.save(args.storage)
+        print(
+            f"Replaced doc {args.id!r}: removed {result['text_removed']} text "
+            f"+ {result['vision_removed']} vision unit(s), indexed {n} chunk(s)"
+        )
+        return 0
     n = engine.add_text(args.id, text, title=args.title or "")
     engine.save(args.storage)
     print(f"Indexed {n} text chunk(s) into {args.storage}")
+    return 0
+
+
+def _cmd_delete(args: argparse.Namespace) -> int:
+    engine = HybridRAG.load(args.storage)
+    result = engine.delete(args.id)
+    engine.save(args.storage)
+    total = result["text_removed"] + result["vision_removed"]
+    if total == 0:
+        print(f"No units found for doc {args.id!r}.")
+    else:
+        print(
+            f"Deleted doc {args.id!r}: {result['text_removed']} text "
+            f"+ {result['vision_removed']} vision unit(s)"
+        )
+    return 0
+
+
+def _cmd_list_docs(args: argparse.Namespace) -> int:
+    engine = HybridRAG.load(args.storage)
+    doc_ids = sorted(engine.doc_ids())
+    if args.json:
+        print(json.dumps(doc_ids, indent=2))
+        return 0
+    if not doc_ids:
+        print("No documents indexed.")
+        return 0
+    for d in doc_ids:
+        print(d)
     return 0
 
 
@@ -160,7 +201,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--file", help="read text from a file")
     sp.add_argument("--text", help="inline text (else stdin)")
     sp.add_argument("--title", help="document title")
+    sp.add_argument("--replace", action="store_true",
+                    help="upsert: delete any existing units for --id first")
     sp.set_defaults(func=_cmd_add_text)
+
+    sp = sub.add_parser("delete", help="remove all units for a document id")
+    add_storage(sp)
+    sp.add_argument("--id", required=True, help="document id to delete")
+    sp.set_defaults(func=_cmd_delete)
+
+    sp = sub.add_parser("list-docs", help="list indexed document ids")
+    add_storage(sp)
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_list_docs)
 
     sp = sub.add_parser("ingest-url", help="screenshot + tile a web page (needs [render])")
     add_storage(sp)

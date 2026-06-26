@@ -80,6 +80,39 @@ def test_stats_tool(engine):
     assert "storage" in out
 
 
+def test_delete_tool_removes_doc(engine):
+    out = call_tool("hybridrag_delete", {"doc_id": "doc1"}, engine=engine)
+    assert out["doc_id"] == "doc1"
+    assert out["text_removed"] >= 1
+    listed = call_tool("hybridrag_list_docs", {}, engine=engine)
+    assert "doc1" not in listed["doc_ids"]
+    assert "doc2" in listed["doc_ids"]
+
+
+def test_delete_tool_requires_doc_id(engine):
+    with pytest.raises(ValueError):
+        call_tool("hybridrag_delete", {}, engine=engine)
+
+
+def test_update_text_tool_replaces(engine):
+    out = call_tool(
+        "hybridrag_update_text",
+        {"doc_id": "doc1", "text": "completely rewritten body about turbines. " * 10},
+        engine=engine,
+    )
+    assert out["doc_id"] == "doc1"
+    assert out["text_removed"] >= 1
+    assert out["chunks_added"] >= 1
+    res = call_tool("hybridrag_search", {"query": "turbines", "modality": "text"}, engine=engine)
+    assert res["results"] and res["results"][0]["doc_id"] == "doc1"
+
+
+def test_list_docs_tool(engine):
+    out = call_tool("hybridrag_list_docs", {}, engine=engine)
+    assert out["count"] == 2
+    assert set(out["doc_ids"]) == {"doc1", "doc2"}
+
+
 def test_unknown_tool_raises(engine):
     with pytest.raises(KeyError):
         call_tool("nope", {}, engine=engine)

@@ -30,6 +30,40 @@ def test_save_and_load(tmp_path):
     assert hits[0][1]["doc_id"] == "1"
 
 
+def test_delete_doc_removes_records():
+    store = VectorStore(dim=3)
+    store.add(
+        np.eye(3, dtype=np.float32),
+        [{"unit_id": "a1", "doc_id": "a"}, {"unit_id": "a2", "doc_id": "a"},
+         {"unit_id": "b1", "doc_id": "b"}],
+    )
+    removed = store.delete_doc("a")
+    assert removed == 2
+    assert len(store) == 1
+    assert store.doc_ids() == {"b"}
+    # surviving vector is still searchable and correctly aligned with its meta
+    hits = store.search(np.array([0, 0, 1], dtype=np.float32), top_k=1)
+    assert hits[0][1]["unit_id"] == "b1"
+
+
+def test_delete_missing_doc_is_noop():
+    store = VectorStore(dim=2)
+    store.add(np.eye(2, dtype=np.float32), [{"doc_id": "x"}, {"doc_id": "y"}])
+    assert store.delete_doc("absent") == 0
+    assert len(store) == 2
+
+
+def test_delete_all_then_add_again():
+    store = VectorStore(dim=2)
+    store.add(np.eye(2, dtype=np.float32), [{"doc_id": "x"}, {"doc_id": "x"}])
+    assert store.delete_doc("x") == 2
+    assert len(store) == 0
+    # store remains usable after being emptied
+    store.add(np.array([[1, 0]], dtype=np.float32), [{"doc_id": "z"}])
+    assert len(store) == 1
+    assert store.doc_ids() == {"z"}
+
+
 def test_dim_mismatch_raises():
     store = VectorStore(dim=4)
     try:

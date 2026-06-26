@@ -47,6 +47,10 @@ That power comes with real costs:
   GPU; "which chart shows…" leans visual.
 - **No vendor lock-in.** Text and vision encoders sit behind small interfaces.
   Swap MiniLM for E5, or CLIP for Qwen-VL, without touching the pipeline.
+- **Cheap to keep current.** Pixel RAG makes edits painful — change one line and
+  you re-screenshot, re-tile, re-embed the page. HybridRAG keys every unit by
+  `doc_id`, so `update`/`delete` re-embed only the document that changed and
+  leave the rest of the index untouched.
 - **Runs anywhere, immediately.** The core depends on **numpy only**. Deterministic
   fallback encoders let you try the full pipeline — ingest, fuse, serve — with
   zero model downloads, then opt into real models when you're ready.
@@ -138,6 +142,11 @@ hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf
 hybridrag search     --storage .idx --query "quarterly revenue table" -k 5
 hybridrag stats      --storage .idx
 
+# Incremental updates — re-embed only the doc that changed, not the corpus
+hybridrag add-text   --storage .idx --id readme --file README.md --replace
+hybridrag delete     --storage .idx --id readme
+hybridrag list-docs  --storage .idx
+
 # Serve a search API (needs [serve])
 hybridrag serve      --storage .idx --port 8000
 #  GET /search?q=...&k=5   ·   POST /search {"query": "...", "top_k": 5}
@@ -166,7 +175,7 @@ elsewhere:
 claude mcp add hybridrag -- python -m hybridrag.mcp_server
 ```
 
-The server exposes four tools over a persistent index (set by
+The server exposes these tools over a persistent index (set by
 `$HYBRIDRAG_STORAGE`, default `.hybridrag_index`):
 
 | Tool | Purpose |
@@ -174,7 +183,10 @@ The server exposes four tools over a persistent index (set by
 | `hybridrag_search` | Fused text+pixel search; force a modality with `modality`. |
 | `hybridrag_add_text` | Chunk and index a raw text document. |
 | `hybridrag_add_html` | Extract text from HTML, then chunk and index it. |
-| `hybridrag_stats` | Report index size, models, and dimensions. |
+| `hybridrag_update_text` | Replace a document in place — re-embed only that `doc_id`. |
+| `hybridrag_delete` | Remove every unit belonging to a `doc_id`. |
+| `hybridrag_list_docs` | List the distinct document ids in the index. |
+| `hybridrag_stats` | Report document count, index size, models, and dimensions. |
 
 The bundled **skill** (`.claude/skills/hybridrag/`) is picked up automatically by
 Claude Code in this repo; it tells Claude to prefer text-only retrieval for code,
@@ -300,8 +312,8 @@ ruff check .
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md). Near-term: cross-encoder reranking of fused
-results, async batched ingestion, incremental updates/deletes keyed by
-`doc_id`, and a real Qwen-VL embedding adapter. The
+results, async batched ingestion, and a real Qwen-VL embedding adapter.
+Incremental updates/deletes keyed by `doc_id` landed in v0.4. The
 [MCP server + Claude skill](#use-with-claude-mcp--skill) landed in v0.3; the
 [evaluation harness](#evaluation) (text-only / pixel-only / hybrid on one
 corpus) landed in v0.2.
