@@ -116,10 +116,50 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "hybridrag_delete",
+        "description": (
+            "Delete every text chunk and image tile belonging to a document id. "
+            "Use this to remove a document from the index. Persists the index."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "doc_id": {"type": "string", "description": "Document id to remove."},
+            },
+            "required": ["doc_id"],
+        },
+    },
+    {
+        "name": "hybridrag_update_text",
+        "description": (
+            "Replace a document's text in place: delete any existing units for "
+            "`doc_id`, then chunk and re-index the new text. Only this document "
+            "is re-embedded. Use this when a source document changed. Persists."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "doc_id": {"type": "string", "description": "Document id to replace."},
+                "text": {"type": "string", "description": "The new document body."},
+                "title": {"type": "string", "description": "Optional title."},
+            },
+            "required": ["doc_id", "text"],
+        },
+    },
+    {
+        "name": "hybridrag_list_docs",
+        "description": (
+            "List the distinct document ids currently present in the index "
+            "(across both text and vision modalities)."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "hybridrag_stats",
         "description": (
-            "Report index statistics: number of text and vision units, the "
-            "configured models, embedding dimensions, and storage location."
+            "Report index statistics: number of documents, text and vision "
+            "units, the configured models, embedding dimensions, and storage "
+            "location."
         ),
         "inputSchema": {"type": "object", "properties": {}},
     },
@@ -166,6 +206,31 @@ def _tool_add_html(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     return {"doc_id": doc_id, "chunks_added": n, "storage": engine.config.storage_dir}
 
 
+def _tool_delete(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    doc_id = args.get("doc_id")
+    if not doc_id:
+        raise ValueError("`doc_id` is required")
+    result = engine.delete(doc_id)
+    engine.save()
+    return {"doc_id": doc_id, "storage": engine.config.storage_dir, **result}
+
+
+def _tool_update_text(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    doc_id = args.get("doc_id")
+    text = args.get("text")
+    if not doc_id or text is None:
+        raise ValueError("`doc_id` and `text` are required")
+    result = engine.upsert_text(doc_id, text, title=args.get("title", ""))
+    engine.save()
+    result["storage"] = engine.config.storage_dir
+    return result
+
+
+def _tool_list_docs(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    doc_ids = sorted(engine.doc_ids())
+    return {"count": len(doc_ids), "doc_ids": doc_ids}
+
+
 def _tool_stats(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     stats = engine.stats()
     stats["storage"] = engine.config.storage_dir
@@ -176,6 +241,9 @@ _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_search": _tool_search,
     "hybridrag_add_text": _tool_add_text,
     "hybridrag_add_html": _tool_add_html,
+    "hybridrag_delete": _tool_delete,
+    "hybridrag_update_text": _tool_update_text,
+    "hybridrag_list_docs": _tool_list_docs,
     "hybridrag_stats": _tool_stats,
 }
 

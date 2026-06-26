@@ -29,13 +29,21 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       can index and search documents mid-conversation. Dependency-light handler
       layer runs on numpy alone; the `mcp` runtime is an opt-in extra.
 
+## Done (v0.4.0)
+- [x] **Incremental updates & deletes keyed by `doc_id`** — `delete`,
+      `list-docs`, and `add-text --replace` (upsert) on the CLI;
+      `HybridRAG.delete()` / `upsert_text()` / `upsert_html()` / `doc_ids()` on
+      the engine; `delete_where()` / `delete_doc()` on the store (compacts
+      vectors + metadata, rebuilds FAISS from survivors); and
+      `hybridrag_delete` / `hybridrag_update_text` / `hybridrag_list_docs` MCP
+      tools. Only the changed document is re-embedded.
+
 ## Next
 - [ ] **Per-query cost model** — extend the harness with $/query and storage
       projections (vector + screenshot bytes) across modalities.
 - [ ] **Cross-encoder reranking** of the fused candidate set.
 - [ ] **Qwen-VL embedding adapter** with batched GPU inference.
 - [ ] **Async / batched ingestion** for large corpora.
-- [ ] **Incremental updates & deletes** keyed by `doc_id`.
 - [ ] **Selective pixel indexing** — heuristics to render only pages that are
       visually rich (tables/figures), saving storage and GPU.
 - [ ] **Hybrid answer synthesis** — feed top text + top tiles to a VLM reader.

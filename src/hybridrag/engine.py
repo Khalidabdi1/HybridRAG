@@ -93,6 +93,36 @@ class HybridRAG:
     def add_html(self, doc_id: str, html: str, title: str = "") -> int:
         return self.add_text(doc_id, html_to_text(html), title=title)
 
+    # ------------------------------------------------------------ update/delete
+    def delete(self, doc_id: str) -> dict:
+        """Remove all text chunks and image tiles belonging to ``doc_id``.
+
+        Returns the number of units removed per modality. This is the cheap
+        incremental path that avoids re-indexing the whole corpus when a single
+        document is removed or about to be replaced.
+        """
+        removed_text = self.text_store.delete_doc(doc_id)
+        removed_vision = self.vision_store.delete_doc(doc_id)
+        return {"text_removed": removed_text, "vision_removed": removed_vision}
+
+    def upsert_text(self, doc_id: str, text: str, title: str = "", page: int = 0) -> dict:
+        """Replace a document's text: delete any existing chunks, then re-add.
+
+        Use this when a source document changed — only this ``doc_id`` is
+        re-embedded, the rest of the index is untouched.
+        """
+        removed = self.delete(doc_id)
+        added = self.add_text(doc_id, text, title=title, page=page)
+        return {"doc_id": doc_id, "chunks_added": added, **removed}
+
+    def upsert_html(self, doc_id: str, html: str, title: str = "") -> dict:
+        """HTML counterpart of :meth:`upsert_text`."""
+        return self.upsert_text(doc_id, html_to_text(html), title=title)
+
+    def doc_ids(self) -> set:
+        """Every distinct ``doc_id`` present in either modality."""
+        return self.text_store.doc_ids() | self.vision_store.doc_ids()
+
     # ------------------------------------------------------------------ search
     def search(
         self,
@@ -177,6 +207,7 @@ class HybridRAG:
 
     def stats(self) -> dict:
         return {
+            "documents": len(self.doc_ids()),
             "text_units": len(self.text_store),
             "vision_units": len(self.vision_store),
             "text_model": self.config.text_model,

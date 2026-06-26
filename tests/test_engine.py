@@ -47,3 +47,38 @@ def test_tiles_indexed():
     tiles = [Tile(id=f"t{i}", doc_id="img_doc", page=0, row=i) for i in range(3)]
     assert rag.add_tiles(tiles) == 3
     assert rag.stats()["vision_units"] == 3
+
+
+def test_delete_removes_doc_across_modalities():
+    rag = _engine()
+    rag.add_text("d1", "alpha beta gamma content here. " * 20)
+    rag.add_text("d2", "delta epsilon zeta content here. " * 20)
+    rag.add_tiles([Tile(id="t1", doc_id="d1", image_path=None)])
+    assert rag.doc_ids() == {"d1", "d2"}
+
+    result = rag.delete("d1")
+    assert result["text_removed"] >= 1
+    assert result["vision_removed"] == 1
+    assert rag.doc_ids() == {"d2"}
+    # d1 no longer surfaces in search
+    res = rag.search("alpha beta gamma", top_k=5)
+    assert all(r.doc_id != "d1" for r in res)
+
+
+def test_upsert_text_replaces_not_appends():
+    rag = _engine()
+    rag.add_text("d", "old stale content that should disappear. " * 20)
+    before = rag.stats()["text_units"]
+    out = rag.upsert_text("d", "fresh new replacement content entirely. " * 20)
+    assert out["text_removed"] == before
+    # only one doc remains, with the new content
+    assert rag.doc_ids() == {"d"}
+    res = rag.search("fresh new replacement", top_k=3)
+    assert res and res[0].doc_id == "d"
+
+
+def test_stats_counts_documents():
+    rag = _engine()
+    rag.add_text("a", "content one here. " * 20)
+    rag.add_text("b", "content two here. " * 20)
+    assert rag.stats()["documents"] == 2

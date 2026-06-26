@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Set, Tuple
 
 import numpy as np
 
@@ -49,6 +49,38 @@ class VectorStore:
         self._meta.extend(metas)
         if self._faiss_index is not None:
             self._faiss_index.add(vectors)
+
+    # ---- mutation ----
+    def delete_where(self, predicate: Callable[[Dict[str, Any]], bool]) -> int:
+        """Remove every record whose metadata matches ``predicate``.
+
+        Returns the number of records removed. The FAISS index (if any) is
+        rebuilt from the surviving vectors, since ``IndexFlatIP`` has no
+        in-place removal.
+        """
+        if not self._meta:
+            return 0
+        keep = [i for i, m in enumerate(self._meta) if not predicate(m)]
+        removed = len(self._meta) - len(keep)
+        if removed == 0:
+            return 0
+        self._vectors = (
+            self._vectors[keep] if keep else np.zeros((0, self.dim), dtype=np.float32)
+        )
+        self._meta = [self._meta[i] for i in keep]
+        if self._faiss_index is not None:
+            self._faiss_index = self._faiss.IndexFlatIP(self.dim)
+            if len(self._vectors):
+                self._faiss_index.add(self._vectors)
+        return removed
+
+    def delete_doc(self, doc_id: str) -> int:
+        """Remove every record belonging to ``doc_id``. Returns the count."""
+        return self.delete_where(lambda m: m.get("doc_id") == doc_id)
+
+    def doc_ids(self) -> Set[str]:
+        """The set of distinct ``doc_id`` values currently stored."""
+        return {m.get("doc_id") for m in self._meta if m.get("doc_id") is not None}
 
     # ---- query ----
     def search(self, query: np.ndarray, top_k: int = 10) -> List[Tuple[float, Dict[str, Any]]]:
