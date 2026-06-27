@@ -153,6 +153,9 @@ hybridrag serve      --storage .idx --port 8000
 
 # Benchmark text-only vs vision-only vs hybrid on a dataset
 hybridrag eval       --dataset examples/datasets/sample.json -k 1,5,10
+
+# Model storage + $/query cost per modality and project it to N pages
+hybridrag cost       --storage .idx --project-pages 10000000
 ```
 
 ## Use with Claude (MCP + Skill)
@@ -187,6 +190,7 @@ The server exposes these tools over a persistent index (set by
 | `hybridrag_delete` | Remove every unit belonging to a `doc_id`. |
 | `hybridrag_list_docs` | List the distinct document ids in the index. |
 | `hybridrag_stats` | Report document count, index size, models, and dimensions. |
+| `hybridrag_cost` | Model storage + $/query per modality and project it to N pages. |
 
 The bundled **skill** (`.claude/skills/hybridrag/`) is picked up automatically by
 Claude Code in this repo; it tells Claude to prefer text-only retrieval for code,
@@ -252,6 +256,54 @@ report = evaluate(build_engine(ds), ds.queries, ks=(1, 5, 10))
 print(report.table())
 ```
 
+### Cost & storage model
+
+Ranking metrics tell you whether pixels *help*; the cost model tells you what
+they *cost*. It measures vector bytes exactly from the index and models raw
+artifact bytes (screenshots, tile crops, stored text), one-time indexing $, and
+$/query from a transparent `CostModel` of unit prices you can override with your
+provider's real numbers. It then **projects** storage to any corpus size — the
+direct answer to *"10 million pages, how many terabytes is that?"*
+
+```bash
+hybridrag cost --project-pages 10000000          # or: hybridrag eval --cost
+```
+
+```
+Cost model — dataset: hybridrag-sample  (text_units=12, vision_units=0)
+mode    vectors  artifacts  total    $/mo (store)  $/index    $/query
+------  -------  ---------  -------  ------------  ---------  ---------
+text    18.0 KB  12.0 KB    30.0 KB  $6.58e-07     $1.20e-06  $2.00e-06
+vision  0 B      0 B        0 B      $0            $0         $4.00e-04
+hybrid  18.0 KB  12.0 KB    30.0 KB  $6.58e-07     $1.20e-06  $4.02e-04
+
+Storage projection — 10,000,000 pages
+mode    bytes/page  total    $/mo (store)
+------  ----------  -------  ------------
+text    7.5 KB      71.5 GB  $1.65
+vision  628.0 KB    5.8 TB   $137.75
+hybrid  635.5 KB    5.9 TB   $139.39
+  vision/text storage ratio: 84x
+```
+
+At ten million pages, a pixel-only index is **~84× larger** than a text index
+(terabytes vs gigabytes) and ~200× more expensive to embed and to query — which
+is exactly why HybridRAG keeps text as the cheap default and spends vision only
+where layout actually matters. Override any price with a JSON file:
+
+```bash
+echo '{"storage_usd_per_gb_month": 0.10, "vision_embed_usd_per_1k_units": 0.05}' > prices.json
+hybridrag cost --cost-model prices.json --project-pages 10000000
+```
+
+```python
+from hybridrag.eval import estimate_cost, CostModel, build_engine, sample_dataset
+
+report = estimate_cost(build_engine(sample_dataset()), CostModel())
+print(report.table())
+print(report.projection_table(pages=10_000_000))
+```
+
 ## How it works
 
 ### 1. Two stores, one engine
@@ -290,7 +342,7 @@ src/hybridrag/
 ├── index/              # VectorStore (numpy / FAISS)
 ├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile)
 ├── retrieve/           # router (per-query weights) + fusion (RRF)
-├── eval/               # metrics, datasets, harness (text vs vision vs hybrid)
+├── eval/               # metrics, datasets, harness, cost model (text vs vision vs hybrid)
 ├── serve/              # FastAPI search API
 ├── mcp_server.py       # MCP server for Claude (`hybridrag-mcp`)
 └── cli.py              # `hybridrag` command
@@ -312,11 +364,12 @@ ruff check .
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md). Near-term: cross-encoder reranking of fused
-results, async batched ingestion, and a real Qwen-VL embedding adapter.
-Incremental updates/deletes keyed by `doc_id` landed in v0.4. The
-[MCP server + Claude skill](#use-with-claude-mcp--skill) landed in v0.3; the
-[evaluation harness](#evaluation) (text-only / pixel-only / hybrid on one
-corpus) landed in v0.2.
+results, async batched ingestion, and a real Qwen-VL embedding adapter. The
+[cost & storage model](#cost--storage-model) ($/query + at-scale storage
+projection) landed in v0.5. Incremental updates/deletes keyed by `doc_id` landed
+in v0.4. The [MCP server + Claude skill](#use-with-claude-mcp--skill) landed in
+v0.3; the [evaluation harness](#evaluation) (text-only / pixel-only / hybrid on
+one corpus) landed in v0.2.
 
 ## Acknowledgements
 

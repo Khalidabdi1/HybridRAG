@@ -22,9 +22,9 @@ models are opt-in.
 
 - **MCP tools** (preferred inside Claude) — the `hybridrag` server exposes
   `hybridrag_search`, `hybridrag_add_text`, `hybridrag_add_html`,
-  `hybridrag_update_text`, `hybridrag_delete`, `hybridrag_list_docs`, and
-  `hybridrag_stats`. Configured via `.mcp.json`; the index lives in
-  `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
+  `hybridrag_update_text`, `hybridrag_delete`, `hybridrag_list_docs`,
+  `hybridrag_stats`, and `hybridrag_cost`. Configured via `.mcp.json`; the index
+  lives in `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
 - **CLI** — for screenshot/PDF ingestion and serving, which need extra
   dependencies.
 
@@ -43,6 +43,11 @@ models are opt-in.
 
 Ground your answer in the returned `text`/`image_path` and cite `doc_id`.
 
+When the user asks what an index *costs* — storage, $/query, or "how big would N
+pages be?" — call `hybridrag_cost` (optionally with `project_pages`). It returns
+vector + artifact bytes, indexing and per-query $ for text vs vision vs hybrid,
+and a storage projection that quantifies why pixel-only RAG is far pricier.
+
 ## CLI reference
 
 ```bash
@@ -55,6 +60,7 @@ hybridrag add-text  --storage .idx --id doc1 --file README.md --replace    # ups
 hybridrag delete    --storage .idx --id doc1                               # remove a document
 hybridrag list-docs --storage .idx
 hybridrag eval      --dataset examples/datasets/sample.json               # text vs vision vs hybrid
+hybridrag cost      --storage .idx --project-pages 10000000               # storage + $/query model
 hybridrag stats     --storage .idx
 ```
 

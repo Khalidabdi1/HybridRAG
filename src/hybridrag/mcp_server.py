@@ -163,6 +163,27 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         ),
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "hybridrag_cost",
+        "description": (
+            "Model the storage and dollar cost of the current index per "
+            "modality (text vs vision/pixel vs hybrid): vector + raw-artifact "
+            "bytes, one-time indexing $, and $/query. Also projects total "
+            "storage and monthly cost to a target corpus size — use this to "
+            "answer 'how much would N pages cost to store?' and to quantify why "
+            "pixel-only RAG is far more expensive than text or hybrid."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_pages": {
+                    "type": "integer",
+                    "description": "Corpus size to project storage to (default 1,000,000).",
+                    "minimum": 1,
+                },
+            },
+        },
+    },
 ]
 
 
@@ -237,6 +258,16 @@ def _tool_stats(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     return stats
 
 
+def _tool_cost(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    from .eval import estimate_cost
+
+    pages = int(args.get("project_pages") or 1_000_000)
+    report = estimate_cost(engine, dataset_name=engine.config.storage_dir)
+    out = report.to_dict()
+    out["projection"] = {"pages": pages, **report.project(pages)}
+    return out
+
+
 _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_search": _tool_search,
     "hybridrag_add_text": _tool_add_text,
@@ -245,6 +276,7 @@ _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_update_text": _tool_update_text,
     "hybridrag_list_docs": _tool_list_docs,
     "hybridrag_stats": _tool_stats,
+    "hybridrag_cost": _tool_cost,
 }
 
 

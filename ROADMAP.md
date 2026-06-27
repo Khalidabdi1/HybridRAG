@@ -38,9 +38,15 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       `hybridrag_delete` / `hybridrag_update_text` / `hybridrag_list_docs` MCP
       tools. Only the changed document is re-embedded.
 
+## Done (v0.5.0)
+- [x] **Per-query cost & storage model** (`hybridrag.eval.cost`) — measure vector
+      bytes exactly from the index, model raw artifact bytes (screenshots, tiles,
+      stored text), one-time indexing $, and $/query per modality, then project
+      total storage + monthly $ to any corpus size (the "10M pages → N TB"
+      question). Tunable `CostModel` unit prices; `hybridrag cost`, `hybridrag
+      eval --cost`, and a `hybridrag_cost` MCP tool.
+
 ## Next
-- [ ] **Per-query cost model** — extend the harness with $/query and storage
-      projections (vector + screenshot bytes) across modalities.
 - [ ] **Cross-encoder reranking** of the fused candidate set.
 - [ ] **Qwen-VL embedding adapter** with batched GPU inference.
 - [ ] **Async / batched ingestion** for large corpora.
