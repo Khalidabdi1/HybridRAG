@@ -171,10 +171,64 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     modes = [m.strip() for m in args.modes.split(",") if m.strip()]
     report = evaluate(engine, dataset.queries, ks=ks, modes=modes, dataset_name=dataset.name)
 
+    cost_report = None
+    if getattr(args, "cost", False):
+        from .eval import estimate_cost
+        cost_report = estimate_cost(engine, dataset_name=dataset.name)
+
     if args.json:
-        print(json.dumps(report.to_dict(), indent=2))
+        out = report.to_dict()
+        if cost_report is not None:
+            out["cost"] = cost_report.to_dict()
+            out["cost"]["projection"] = {
+                "pages": args.project_pages,
+                **cost_report.project(args.project_pages),
+            }
+        print(json.dumps(out, indent=2))
     else:
         print(report.table(primary_k=args.primary_k))
+        if cost_report is not None:
+            print()
+            print(cost_report.table())
+            print()
+            print(cost_report.projection_table(args.project_pages))
+    return 0
+
+
+def _cmd_cost(args: argparse.Namespace) -> int:
+    from .eval import CostModel, build_engine, estimate_cost, sample_dataset
+    from .eval.dataset import EvalDataset
+
+    cm = CostModel()
+    if args.cost_model:
+        with open(args.cost_model, "r", encoding="utf-8") as fh:
+            overrides = json.load(fh)
+        known = set(CostModel().to_dict())
+        cm = CostModel(**{k: v for k, v in overrides.items() if k in known})
+
+    # Prefer a real, persisted index; otherwise build one from a dataset/sample.
+    if args.storage and os.path.exists(os.path.join(args.storage, "config.json")):
+        engine = HybridRAG.load(args.storage)
+        name = args.storage
+    else:
+        if args.dataset:
+            dataset = EvalDataset.from_file(args.dataset)
+        else:
+            dataset = sample_dataset()
+        engine = build_engine(dataset, HybridConfig(
+            text_model=args.text_model, vision_model=args.vision_model))
+        name = dataset.name
+
+    report = estimate_cost(engine, cost_model=cm, dataset_name=name)
+
+    if args.json:
+        out = report.to_dict()
+        out["projection"] = {"pages": args.project_pages, **report.project(args.project_pages)}
+        print(json.dumps(out, indent=2))
+        return 0
+    print(report.table())
+    print()
+    print(report.projection_table(args.project_pages))
     return 0
 
 
@@ -248,8 +302,23 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-k", default="1,3,5,10", help="comma-separated cutoffs")
     sp.add_argument("--primary-k", type=int, help="k used for the printed table (default: max)")
     sp.add_argument("--modes", default="text,vision,hybrid", help="comma-separated modes")
+    sp.add_argument("--cost", action="store_true",
+                    help="also print the storage/$ cost model and a projection")
+    sp.add_argument("--project-pages", type=int, default=1_000_000,
+                    help="corpus size to project storage cost to (default 1,000,000)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_eval)
+
+    sp = sub.add_parser("cost", help="model storage + $/query cost per modality and project it")
+    add_storage(sp)
+    sp.add_argument("--dataset", help="dataset JSON to build an index from if --storage is empty")
+    sp.add_argument("--text-model", default="hash", help='text encoder id (default "hash")')
+    sp.add_argument("--vision-model", default="hash", help='vision encoder id (default "hash")')
+    sp.add_argument("--cost-model", help="JSON file of CostModel field overrides (real prices)")
+    sp.add_argument("--project-pages", type=int, default=10_000_000,
+                    help="corpus size to project storage to (default 10,000,000)")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_cost)
 
     sp = sub.add_parser("serve", help="serve a search API (needs [serve])")
     add_storage(sp)

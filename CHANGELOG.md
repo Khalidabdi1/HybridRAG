@@ -3,6 +3,25 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] - 2026-06-27
+### Added
+- **Per-query cost & storage model** (`hybridrag.eval.cost`) — turns Pixel RAG's
+  central weakness (storage and GPU cost) into measurable numbers per modality.
+  - `CostModel`: tunable unit prices (storage $/GB-month, text vs vision embed $,
+    render $/page, per-query $) and artifact sizes (screenshot, tile, text bytes)
+    with documented order-of-magnitude defaults; override via a JSON file.
+  - `estimate_cost(engine)` → `CostReport` with a `ModeCost` breakdown for text /
+    vision / hybrid: vector bytes (measured exactly), modelled artifact bytes,
+    one-time index $, and $/query; one screenshot is attributed per distinct
+    rendered page and one tile per vision unit.
+  - `CostReport.project(pages)` and `projection_table()` extrapolate total storage
+    and monthly $ to any corpus size (e.g. 10M pages → terabytes), with the
+    vision/text storage ratio called out.
+  - CLI: `hybridrag cost` (on a persisted index or a dataset, `--cost-model`,
+    `--project-pages`) and a `--cost`/`--project-pages` flag on `hybridrag eval`.
+  - MCP: `hybridrag_cost` tool so Claude can reason about $/storage mid-chat.
+  - Tests: `tests/test_cost.py`.
+
 ## [0.4.0] - 2026-06-26
 ### Added
 - **Incremental updates & deletes keyed by `doc_id`** — re-embed only the

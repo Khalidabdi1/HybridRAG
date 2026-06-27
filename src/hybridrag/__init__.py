@@ -19,7 +19,7 @@ visual strength of pixel RAG for tables, charts, and complex layouts.
 from .types import Chunk, Document, Modality, SearchResult, Tile
 from .config import HybridConfig
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "Chunk",
