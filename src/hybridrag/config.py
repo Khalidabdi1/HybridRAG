@@ -40,6 +40,12 @@ class HybridConfig:
     vision_weight: float = 1.0
     enable_router: bool = True  # let the router adjust per-query weights
 
+    # ---- reranking ----
+    enable_rerank: bool = False  # rerank the fused candidate set before returning
+    rerank_model: str = "lexical"  # "lexical" (BM25, no deps), "none", or a CrossEncoder id
+    rerank_top_n: int = 30  # how many fused candidates to rerank (fetch this many first)
+    rerank_blend: float = 0.5  # weight on the reranker score vs the fusion score [0..1]
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod

@@ -35,7 +35,10 @@ models are opt-in.
    persists). Pass a stable `doc_id` so re-indexing is traceable.
 3. `hybridrag_search` — query. Returns fused, ranked hits with per-modality
    `components`. Set `modality: "text"` or `"vision"` to force one; omit to let
-   the router blend both. Prefer text-only for code, logs, and JSON.
+   the router blend both. Prefer text-only for code, logs, and JSON. Pass
+   `rerank: true` to re-score the fused candidates against the query (BM25 /
+   cross-encoder) for higher precision on keyword-specific questions; the chosen
+   hits then carry a `components.rerank` value.
 4. `hybridrag_update_text` / `hybridrag_delete` — when a source document
    changed or should be dropped, update or delete it by `doc_id` instead of
    rebuilding the index; only that document is re-embedded. `hybridrag_list_docs`
