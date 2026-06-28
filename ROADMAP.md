@@ -46,8 +46,16 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       question). Tunable `CostModel` unit prices; `hybridrag cost`, `hybridrag
       eval --cost`, and a `hybridrag_cost` MCP tool.
 
+## Done (v0.6.0)
+- [x] **Cross-encoder reranking of the fused candidate set** (`hybridrag.retrieve.rerank`)
+      — a `Reranker` interface with a dependency-free BM25 `LexicalReranker` default and
+      an opt-in `sentence-transformers` `CrossEncoderReranker`. The engine fuses a deeper
+      candidate pool (`rerank_top_n`) and re-scores it against the query, blending the
+      reranker signal with the fusion score (`rerank_blend`). Exposed via
+      `search(rerank=...)`, `hybridrag search --rerank/--no-rerank`, and a `rerank`
+      parameter on the `hybridrag_search` MCP tool.
+
 ## Next
-- [ ] **Cross-encoder reranking** of the fused candidate set.
 - [ ] **Qwen-VL embedding adapter** with batched GPU inference.
 - [ ] **Async / batched ingestion** for large corpora.
 - [ ] **Selective pixel indexing** — heuristics to render only pages that are

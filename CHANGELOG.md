@@ -3,6 +3,30 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.0] - 2026-06-28
+### Added
+- **Cross-encoder reranking of the fused candidate set** (`hybridrag.retrieve.rerank`)
+  — RRF fuses by *rank* and never looks at query/document content together, so it
+  can't tell a strong answer from a mediocre one at adjacent ranks. A reranker
+  re-scores the small fused candidate set against the query *jointly* for higher
+  precision, the classic cross-encoder pattern (too slow corpus-wide, ideal here).
+  - `Reranker` interface with two backends, mirroring the embedder design:
+    `LexicalReranker` — a dependency-free **BM25** scorer over the candidate set
+    (IDF-weighted, length-normalized; genuinely discriminative offline, not a
+    placeholder) — and `CrossEncoderReranker`, an opt-in
+    `sentence-transformers` `CrossEncoder` wrapper.
+  - `rerank_results()` blends the reranker signal with the fusion score, both
+    min-max normalized (`combined = blend*rerank + (1-blend)*fusion`), records it
+    under `components['rerank']`, and never demotes image-only tiles that have no
+    text to score — they keep their fusion standing.
+  - Engine: `HybridRAG.search(..., rerank=...)` fuses a deeper candidate pool
+    (`rerank_top_n`) then reranks before returning `top_k`; per-query override.
+  - Config: `enable_rerank`, `rerank_model` (`"lexical"` / `"none"` / a
+    CrossEncoder id), `rerank_top_n`, `rerank_blend`.
+  - CLI: `hybridrag search --rerank` / `--no-rerank`.
+  - MCP: a `rerank` parameter on `hybridrag_search`.
+  - Tests: `tests/test_rerank.py`.
+
 ## [0.5.0] - 2026-06-27
 ### Added
 - **Per-query cost & storage model** (`hybridrag.eval.cost`) — turns Pixel RAG's

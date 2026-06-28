@@ -25,6 +25,7 @@ from .embed import build_text_embedder, build_vision_embedder
 from .index import VectorStore
 from .pipeline.extract import chunk_text, html_to_text
 from .retrieve.fusion import reciprocal_rank_fusion
+from .retrieve.rerank import build_reranker, rerank_results
 from .retrieve.router import route
 from .types import Chunk, Modality, SearchResult, Tile
 
@@ -36,6 +37,7 @@ class HybridRAG:
         self.vision_embedder = build_vision_embedder(self.config)
         self.text_store = VectorStore(dim=self.text_embedder.dim)
         self.vision_store = VectorStore(dim=self.vision_embedder.dim)
+        self.reranker = build_reranker(self.config)
 
     # ------------------------------------------------------------------ ingest
     def add_chunks(self, chunks: List[Chunk]) -> int:
@@ -129,9 +131,20 @@ class HybridRAG:
         query: str,
         top_k: Optional[int] = None,
         modality: Optional[Modality] = None,
+        rerank: Optional[bool] = None,
     ) -> List[SearchResult]:
-        """Search both modalities and fuse. ``modality`` forces a single one."""
+        """Search both modalities and fuse. ``modality`` forces a single one.
+
+        When reranking is active (``config.enable_rerank`` or ``rerank=True``),
+        a deeper fused candidate set is built and re-scored against the query by
+        :func:`hybridrag.retrieve.rerank.rerank_results` before the top ``k`` are
+        returned. Pass ``rerank=False`` to force it off for one query.
+        """
         top_k = top_k or self.config.top_k
+        use_rerank = self.config.enable_rerank if rerank is None else rerank
+        reranker = self.reranker if use_rerank else None
+        if use_rerank and reranker is None:
+            reranker = build_reranker(self.config.with_overrides(enable_rerank=True))
 
         if self.config.enable_router and modality is None:
             decision = route(query, self.config.text_weight, self.config.vision_weight)
@@ -146,8 +159,10 @@ class HybridRAG:
                 if m != modality:
                     weights[m] = 0.0
 
-        # Over-fetch per modality so fusion has material to work with.
-        fetch = max(top_k * 3, top_k)
+        # Over-fetch per modality so fusion (and any reranker) has material to
+        # work with. With reranking on we fuse a deeper candidate pool first.
+        fuse_k = max(top_k, self.config.rerank_top_n) if reranker else top_k
+        fetch = max(fuse_k * 3, fuse_k)
         ranked = {}
 
         if weights.get(Modality.TEXT, 0.0) > 0 and len(self.text_store):
@@ -182,9 +197,14 @@ class HybridRAG:
                 for s, m in hits
             ]
 
-        return reciprocal_rank_fusion(
-            ranked, weights, rrf_k=self.config.rrf_k, top_k=top_k
+        fused = reciprocal_rank_fusion(
+            ranked, weights, rrf_k=self.config.rrf_k, top_k=fuse_k
         )
+        if reranker is not None:
+            fused = rerank_results(
+                reranker, query, fused, blend=self.config.rerank_blend
+            )
+        return fused[:top_k]
 
     # ------------------------------------------------------------- persistence
     def save(self, directory: Optional[str] = None) -> str:

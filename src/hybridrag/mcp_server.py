@@ -79,6 +79,14 @@ TOOL_SPECS: List[Dict[str, Any]] = [
                     "enum": ["text", "vision"],
                     "description": "Optional: force a single modality.",
                 },
+                "rerank": {
+                    "type": "boolean",
+                    "description": (
+                        "Optional: rerank the fused candidates with a BM25/"
+                        "cross-encoder pass for higher precision. Defaults to the "
+                        "index configuration."
+                    ),
+                },
             },
             "required": ["query"],
         },
@@ -199,7 +207,8 @@ def _tool_search(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     modality = None
     if args.get("modality"):
         modality = Modality(args["modality"])
-    results = engine.search(query, top_k=top_k, modality=modality)
+    rerank = args.get("rerank")
+    results = engine.search(query, top_k=top_k, modality=modality, rerank=rerank)
     return {
         "query": query,
         "count": len(results),

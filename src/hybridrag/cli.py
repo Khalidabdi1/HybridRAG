@@ -129,7 +129,9 @@ def _cmd_ingest_pdf(args: argparse.Namespace) -> int:
 def _cmd_search(args: argparse.Namespace) -> int:
     engine = HybridRAG.load(args.storage)
     modality = Modality(args.modality) if args.modality else None
-    results = engine.search(args.query, top_k=args.k, modality=modality)
+    results = engine.search(
+        args.query, top_k=args.k, modality=modality, rerank=args.rerank
+    )
     if args.json:
         print(json.dumps([r.to_dict() for r in results], indent=2))
         return 0
@@ -288,6 +290,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--query", required=True)
     sp.add_argument("-k", type=int, default=10)
     sp.add_argument("--modality", choices=["text", "vision"], help="force one modality")
+    sp.add_argument("--rerank", dest="rerank", action="store_true", default=None,
+                    help="rerank the fused candidates (BM25/cross-encoder) before returning")
+    sp.add_argument("--no-rerank", dest="rerank", action="store_false",
+                    help="disable reranking even if the index config enables it")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_search)
 

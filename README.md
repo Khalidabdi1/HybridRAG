@@ -67,7 +67,8 @@ A document flows down **two parallel pipelines**:
                          │ PIXEL:  render  → tile  → vision-embed → index │──┤
                          └───────────────────────────────────────────────┘  │
                                                                              ▼
-        Query ──► Router (per-modality weights) ──► search both ──► RRF Fusion ──► Results
+        Query ──► Router (per-modality weights) ──► search both ──► RRF Fusion ──► Rerank* ──► Results
+                                                                              (*optional BM25 / cross-encoder)
 ```
 
 ## Quickstart
@@ -325,7 +326,26 @@ raw score: each list contributes `weight / (k + rank)` per document. Results are
 grouped by `doc_id`, so a document found by **both** modalities is reinforced,
 and every hit reports its per-modality `components` for transparency.
 
-### 4. Pluggable encoders
+### 4. Reranking (optional)
+RRF fuses by *rank* and never reads the query and a document **together**, so it
+can't separate a strong answer from a mediocre one at adjacent ranks. Turn on
+reranking and the engine fuses a deeper candidate pool (`rerank_top_n`), then
+[`retrieve/rerank.py`](src/hybridrag/retrieve/rerank.py) re-scores those
+candidates against the query *jointly* — the cross-encoder idea, run only on the
+small surviving set where it's affordable. The default `LexicalReranker` is a
+dependency-free **BM25** scorer (IDF-weighted, length-normalized); set
+`rerank_model` to a `sentence-transformers` `CrossEncoder` id for the real model.
+The reranker score is blended with the fusion score (`rerank_blend`) and reported
+under each hit's `components['rerank']`. Image-only tiles keep their fusion
+standing rather than being demoted for having no text.
+
+```bash
+hybridrag search --storage idx --query "cloud revenue growth" --rerank
+#  1. [text] doc=d1 score=1.0000 (text=0.0167 rerank=1.0000)   ← BM25 lifts the on-topic doc
+#  2. [text] doc=d2 score=0.0000 (text=0.0164 rerank=0.0000)
+```
+
+### 5. Pluggable encoders
 Everything implements `TextEmbedder` / `VisionEmbedder`
 ([`embed/base.py`](src/hybridrag/embed/base.py)). The default `hash` encoders are
 deterministic and dependency-free (great for tests and demos); the real
@@ -341,7 +361,7 @@ src/hybridrag/
 ├── embed/              # text & vision encoders (+ hashing fallback)
 ├── index/              # VectorStore (numpy / FAISS)
 ├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile)
-├── retrieve/           # router (per-query weights) + fusion (RRF)
+├── retrieve/           # router (per-query weights) + fusion (RRF) + rerank (BM25/cross-encoder)
 ├── eval/               # metrics, datasets, harness, cost model (text vs vision vs hybrid)
 ├── serve/              # FastAPI search API
 ├── mcp_server.py       # MCP server for Claude (`hybridrag-mcp`)
