@@ -192,6 +192,33 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "hybridrag_richness",
+        "description": (
+            "Score how visually rich a page is (tables, charts, figures, dense "
+            "layout) and decide whether it is worth indexing into the pixel/"
+            "vision modality. Pass `text` and/or `html` (the cheap pre-render "
+            "signal) to decide before rendering. Use this to explain or simulate "
+            "selective pixel indexing — why a code/log/prose page should stay "
+            "text-only while a financial-table page earns the vision path."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Extracted page text to score."},
+                "html": {"type": "string", "description": "Raw HTML to score (stronger signal)."},
+                "mode": {
+                    "type": "string",
+                    "enum": ["auto", "always", "never"],
+                    "description": "Selection policy (default: the index config).",
+                },
+                "threshold": {
+                    "type": "number",
+                    "description": "Richness score required to index pixels (default: index config).",
+                },
+            },
+        },
+    },
 ]
 
 
@@ -277,8 +304,27 @@ def _tool_cost(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _tool_richness(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    from .pipeline.select import PixelSelector
+
+    text = args.get("text")
+    html = args.get("html")
+    if not text and not html:
+        raise ValueError("at least one of `text` or `html` is required")
+    selector = PixelSelector(
+        mode=args.get("mode") or engine.config.pixel_selection,
+        threshold=(
+            float(args["threshold"]) if args.get("threshold") is not None
+            else engine.config.pixel_selection_threshold
+        ),
+        text_weight=engine.config.pixel_selection_text_weight,
+    )
+    return selector.decide(text=text, html=html).to_dict()
+
+
 _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_search": _tool_search,
+    "hybridrag_richness": _tool_richness,
     "hybridrag_add_text": _tool_add_text,
     "hybridrag_add_html": _tool_add_html,
     "hybridrag_delete": _tool_delete,

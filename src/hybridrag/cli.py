@@ -83,22 +83,37 @@ def _cmd_list_docs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _apply_vision_selection(engine: HybridRAG, args: argparse.Namespace) -> None:
+    """Let a CLI ``--vision-selection`` flag override the index policy for this run."""
+    mode = getattr(args, "vision_selection", None)
+    if mode:
+        engine.config.pixel_selection = mode
+        engine.selector = engine.selector.from_config(engine.config)
+
+
 def _cmd_ingest_url(args: argparse.Namespace) -> int:
     from .pipeline.render import render_url_to_png, tile_image
 
     engine = _load_or_new(args.storage)
+    _apply_vision_selection(engine, args)
     shots_dir = os.path.join(args.storage, "shots")
     tiles_dir = os.path.join(args.storage, "tiles")
     os.makedirs(shots_dir, exist_ok=True)
     png = os.path.join(shots_dir, f"{args.id}.png")
     render_url_to_png(args.url, png, viewport_width=engine.config.viewport_width,
                       scale=engine.config.render_scale)
-    tiles = tile_image(png, args.id, tiles_dir, page=0,
-                       tile_height=engine.config.tile_height,
-                       overlap=engine.config.tile_overlap)
-    n_tiles = engine.add_tiles(tiles)
-    engine.save(args.storage)
-    print(f"Indexed {n_tiles} tile(s) from {args.url}")
+    # Decide from the rendered page before paying for tiling + embedding.
+    decision = engine.should_index_pixels(image=png)
+    if decision.index_pixels:
+        tiles = tile_image(png, args.id, tiles_dir, page=0,
+                           tile_height=engine.config.tile_height,
+                           overlap=engine.config.tile_overlap)
+        n_tiles = engine.add_tiles(tiles)
+        engine.save(args.storage)
+        print(f"Indexed {n_tiles} tile(s) from {args.url} ({decision.reason})")
+    else:
+        engine.save(args.storage)
+        print(f"Skipped vision for {args.url}: not visually rich ({decision.reason})")
     return 0
 
 
@@ -107,22 +122,35 @@ def _cmd_ingest_pdf(args: argparse.Namespace) -> int:
     from .pipeline.render import render_pdf_to_pngs, tile_image
 
     engine = _load_or_new(args.storage)
+    _apply_vision_selection(engine, args)
+    page_texts: List[str] = []
     n_text = 0
     if not args.no_text:
         for page_no, page_text in enumerate(extract_pdf_text_by_page(args.pdf)):
+            page_texts.append(page_text)
             n_text += engine.add_text(args.id, page_text, page=page_no)
     n_tiles = 0
+    n_skipped = 0
     if not args.no_vision:
         shots_dir = os.path.join(args.storage, "shots", args.id)
         tiles_dir = os.path.join(args.storage, "tiles")
         for page_no, png in enumerate(render_pdf_to_pngs(args.pdf, shots_dir,
                                                          scale=engine.config.render_scale or 1.5)):
+            page_text = page_texts[page_no] if page_no < len(page_texts) else None
+            # Skip tiling + embedding for text-native pages the text index covers.
+            decision = engine.should_index_pixels(text=page_text, image=png)
+            if not decision.index_pixels:
+                n_skipped += 1
+                continue
             tiles = tile_image(png, args.id, tiles_dir, page=page_no,
                                tile_height=engine.config.tile_height,
                                overlap=engine.config.tile_overlap)
             n_tiles += engine.add_tiles(tiles)
     engine.save(args.storage)
-    print(f"Indexed {n_text} chunk(s) and {n_tiles} tile(s) from {args.pdf}")
+    msg = f"Indexed {n_text} chunk(s) and {n_tiles} tile(s) from {args.pdf}"
+    if n_skipped:
+        msg += f" ({n_skipped} text-native page(s) skipped for vision)"
+    print(msg)
     return 0
 
 
@@ -234,6 +262,34 @@ def _cmd_cost(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_richness(args: argparse.Namespace) -> int:
+    from .pipeline.select import PixelSelector
+
+    text = None
+    html = None
+    if args.file:
+        with open(args.file, "r", encoding="utf-8", errors="replace") as fh:
+            content = fh.read()
+        if args.file.lower().endswith((".html", ".htm")):
+            html = content
+        else:
+            text = content
+    elif args.text:
+        text = args.text
+
+    selector = PixelSelector(mode=args.mode, threshold=args.threshold)
+    decision = selector.decide(text=text, html=html, image=args.image)
+    if args.json:
+        print(json.dumps(decision.to_dict(), indent=2))
+        return 0
+    verdict = "INDEX pixels" if decision.index_pixels else "SKIP pixels"
+    print(f"{verdict}  (score={decision.score:.3f}, {decision.reason})")
+    if decision.signals:
+        sig = "  ".join(f"{k}={v:.3f}" for k, v in decision.signals.items())
+        print(f"  signals: {sig}")
+    return 0
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -271,10 +327,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_list_docs)
 
+    def add_vision_selection(sp):
+        sp.add_argument("--vision-selection", choices=["auto", "always", "never"],
+                        help="override pixel-selection policy for this ingest "
+                             "(auto=index pixels only for visually rich pages)")
+
     sp = sub.add_parser("ingest-url", help="screenshot + tile a web page (needs [render])")
     add_storage(sp)
     sp.add_argument("--id", required=True)
     sp.add_argument("--url", required=True)
+    add_vision_selection(sp)
     sp.set_defaults(func=_cmd_ingest_url)
 
     sp = sub.add_parser("ingest-pdf", help="extract text and render+tile a PDF (needs [render])")
@@ -283,7 +345,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--pdf", required=True)
     sp.add_argument("--no-text", action="store_true", help="skip text extraction")
     sp.add_argument("--no-vision", action="store_true", help="skip rendering/tiling")
+    add_vision_selection(sp)
     sp.set_defaults(func=_cmd_ingest_pdf)
+
+    sp = sub.add_parser("richness", help="score a page's visual richness and the index decision")
+    sp.add_argument("--file", help="text or .html file to score (pre-render signal)")
+    sp.add_argument("--text", help="inline text to score")
+    sp.add_argument("--image", help="rendered page image (PNG/JPG) to score")
+    sp.add_argument("--mode", default="auto", choices=["auto", "always", "never"])
+    sp.add_argument("--threshold", type=float, default=0.35)
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_richness)
 
     sp = sub.add_parser("search", help="search the index")
     add_storage(sp)

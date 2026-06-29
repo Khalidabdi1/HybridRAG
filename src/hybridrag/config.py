@@ -33,6 +33,15 @@ class HybridConfig:
     viewport_width: int = 1280
     render_scale: float = 1.0
 
+    # ---- selective pixel indexing ----
+    # Decide whether a page is worth the (expensive) vision path. "always" keeps
+    # the classic Pixel RAG behaviour, "never" is text-only, and "auto" scores
+    # each page's visual richness (tables/charts/figures) and indexes pixels only
+    # when it clears the threshold — saving storage and GPU on text-native pages.
+    pixel_selection: str = "auto"  # "auto" | "always" | "never"
+    pixel_selection_threshold: float = 0.35  # richness score needed to index pixels
+    pixel_selection_text_weight: float = 0.7  # how much pre-render text structure counts
+
     # ---- retrieval / fusion ----
     top_k: int = 10
     rrf_k: int = 60  # Reciprocal Rank Fusion constant
