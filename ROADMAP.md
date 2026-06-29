@@ -55,11 +55,19 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       `search(rerank=...)`, `hybridrag search --rerank/--no-rerank`, and a `rerank`
       parameter on the `hybridrag_search` MCP tool.
 
+## Done (v0.7.0)
+- [x] **Selective pixel indexing** (`hybridrag.pipeline.select`) — index a page
+      into the vision modality only when it's visually rich enough to earn it.
+      Pre-render text/HTML scoring (tabular rows, numeric grids, media tags) skips
+      rendering entirely for text-native pages; image scoring (ruled lines, colour
+      saturation, mid-tones) judges a rendered page. `pixel_selection`
+      auto/always/never policy, `HybridRAG.should_index_pixels()`, a `hybridrag
+      richness` CLI command, and a `hybridrag_richness` MCP tool. Directly cuts
+      storage and GPU on code/log/JSON/prose pages.
+
 ## Next
 - [ ] **Qwen-VL embedding adapter** with batched GPU inference.
 - [ ] **Async / batched ingestion** for large corpora.
-- [ ] **Selective pixel indexing** — heuristics to render only pages that are
-      visually rich (tables/figures), saving storage and GPU.
 - [ ] **Hybrid answer synthesis** — feed top text + top tiles to a VLM reader.
 - [ ] **Benchmarks & screenshots** from a real corpus in the README.
 

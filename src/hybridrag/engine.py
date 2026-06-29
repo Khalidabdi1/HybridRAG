@@ -24,6 +24,7 @@ from .config import HybridConfig
 from .embed import build_text_embedder, build_vision_embedder
 from .index import VectorStore
 from .pipeline.extract import chunk_text, html_to_text
+from .pipeline.select import SelectionDecision, build_selector
 from .retrieve.fusion import reciprocal_rank_fusion
 from .retrieve.rerank import build_reranker, rerank_results
 from .retrieve.router import route
@@ -38,6 +39,7 @@ class HybridRAG:
         self.text_store = VectorStore(dim=self.text_embedder.dim)
         self.vision_store = VectorStore(dim=self.vision_embedder.dim)
         self.reranker = build_reranker(self.config)
+        self.selector = build_selector(self.config)
 
     # ------------------------------------------------------------------ ingest
     def add_chunks(self, chunks: List[Chunk]) -> int:
@@ -77,6 +79,42 @@ class HybridRAG:
         ]
         self.vision_store.add(vectors, metas)
         return len(tiles)
+
+    # ------------------------------------------------------ selective pixels
+    def should_index_pixels(
+        self,
+        text: Optional[str] = None,
+        html: Optional[str] = None,
+        image: Optional[object] = None,
+    ) -> SelectionDecision:
+        """Decide whether a page is worth rendering/tiling/embedding into vision.
+
+        Consults the configured :class:`~hybridrag.pipeline.select.PixelSelector`
+        (``pixel_selection`` = ``"auto"`` / ``"always"`` / ``"never"``). Pass any
+        signals you have: extracted ``text`` and/or ``html`` are available before
+        rendering (so a "no" skips rendering entirely), and a rendered ``image``
+        (numpy array / PIL image / PNG path) gives the strongest signal. Returns a
+        :class:`~hybridrag.pipeline.select.SelectionDecision` whose
+        ``index_pixels`` flag the caller acts on.
+        """
+        return self.selector.decide(text=text, html=html, image=image)
+
+    def add_tiles_if_rich(
+        self,
+        tiles: List[Tile],
+        text: Optional[str] = None,
+        html: Optional[str] = None,
+        image: Optional[object] = None,
+    ) -> dict:
+        """Index ``tiles`` only when the page clears the selection policy.
+
+        Convenience wrapper around :meth:`should_index_pixels` + :meth:`add_tiles`
+        for the rendering pipelines. Returns the decision plus how many tiles were
+        actually added (``0`` when the page was skipped).
+        """
+        decision = self.should_index_pixels(text=text, html=html, image=image)
+        added = self.add_tiles(tiles) if decision.index_pixels else 0
+        return {"added": added, "decision": decision}
 
     def add_text(self, doc_id: str, text: str, title: str = "", page: int = 0) -> int:
         """Chunk and index raw text. Returns the number of chunks added."""

@@ -136,8 +136,13 @@ hybridrag add-text   --storage .idx --id readme --file README.md --title Readme
 # Screenshot + tile a web page (needs [render])
 hybridrag ingest-url --storage .idx --id wiki --url https://en.wikipedia.org/wiki/RAG
 
-# Extract text AND render+tile a PDF (both modalities)
+# Extract text AND render+tile a PDF (both modalities). Visually rich pages are
+# indexed into the pixel store; text-native pages stay text-only (saves storage+GPU).
 hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf
+hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf --vision-selection always
+
+# Inspect the selective-indexing decision for a page (no index needed)
+hybridrag richness   --file page.html        #  -> INDEX or SKIP pixels + why
 
 # Search (fused). Force a single modality with --modality text|vision
 hybridrag search     --storage .idx --query "quarterly revenue table" -k 5
@@ -192,6 +197,7 @@ The server exposes these tools over a persistent index (set by
 | `hybridrag_list_docs` | List the distinct document ids in the index. |
 | `hybridrag_stats` | Report document count, index size, models, and dimensions. |
 | `hybridrag_cost` | Model storage + $/query per modality and project it to N pages. |
+| `hybridrag_richness` | Score a page's visual richness and decide if it earns the pixel path. |
 
 The bundled **skill** (`.claude/skills/hybridrag/`) is picked up automatically by
 Claude Code in this repo; it tells Claude to prefer text-only retrieval for code,
@@ -351,6 +357,35 @@ Everything implements `TextEmbedder` / `VisionEmbedder`
 deterministic and dependency-free (great for tests and demos); the real
 `sentence-transformers` and VLM backends drop in by changing one config string.
 
+### 6. Selective pixel indexing (ingest-time)
+Pixel RAG's two worst costs — **storage** and **GPU** — both scale with the
+number of pages you push through the vision pipeline. But a page of prose, a code
+listing, or a JSON dump gains nothing from a screenshot: the text index already
+covers it. [`pipeline/select.py`](src/hybridrag/pipeline/select.py) scores how
+*visually rich* a page is and indexes pixels only when it's worth it:
+
+![Selective pixel indexing](docs/images/selective-indexing.svg)
+
+- **Pre-render signal** (cheapest) — `score_text_richness(text, html)` reads the
+  extracted text/HTML *before* anything is rendered, looking for tabular rows,
+  numeric grids, column alignment, and media tags (`<table>`, `<svg>`,
+  `<canvas>`, `<img>`, `<figure>`, `chart`). A low score skips rendering entirely.
+- **Image signal** — `score_image_richness(image)` reads a rendered page (numpy
+  array / PIL image / PNG path) and measures ruled-line density (tables), colour
+  saturation (charts/figures), and mid-tone density (photos) — the cues that
+  survive *only* in pixels.
+
+The policy is one config knob: `pixel_selection` = `"auto"` (score it),
+`"always"` (classic Pixel RAG), or `"never"` (text-only), with
+`pixel_selection_threshold`. `ingest-pdf` / `ingest-url` consult it per page; the
+engine exposes `should_index_pixels(text=, html=, image=)`; and you can inspect
+any page's verdict directly:
+
+```bash
+hybridrag richness --text "def foo(): return 1"       # SKIP pixels (score≈0.05) — code is text-native
+hybridrag richness --file quarterly_report.html       # INDEX pixels (score≈0.95) — it's a table
+```
+
 ## Project layout
 
 ```
@@ -360,7 +395,7 @@ src/hybridrag/
 ├── types.py            # Chunk, Tile, Document, SearchResult, Modality
 ├── embed/              # text & vision encoders (+ hashing fallback)
 ├── index/              # VectorStore (numpy / FAISS)
-├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile)
+├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile) + select (selective pixel indexing)
 ├── retrieve/           # router (per-query weights) + fusion (RRF) + rerank (BM25/cross-encoder)
 ├── eval/               # metrics, datasets, harness, cost model (text vs vision vs hybrid)
 ├── serve/              # FastAPI search API
@@ -383,13 +418,16 @@ ruff check .
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Near-term: cross-encoder reranking of fused
-results, async batched ingestion, and a real Qwen-VL embedding adapter. The
-[cost & storage model](#cost--storage-model) ($/query + at-scale storage
-projection) landed in v0.5. Incremental updates/deletes keyed by `doc_id` landed
-in v0.4. The [MCP server + Claude skill](#use-with-claude-mcp--skill) landed in
-v0.3; the [evaluation harness](#evaluation) (text-only / pixel-only / hybrid on
-one corpus) landed in v0.2.
+See [ROADMAP.md](ROADMAP.md). Near-term: async batched ingestion, a real Qwen-VL
+embedding adapter, and hybrid answer synthesis. [Selective pixel
+indexing](#6-selective-pixel-indexing-ingest-time) — index pixels only for
+visually rich pages — landed in v0.7; [cross-encoder reranking](#4-reranking-optional)
+of fused results in v0.6. The [cost & storage model](#cost--storage-model)
+($/query + at-scale storage projection) landed in v0.5. Incremental
+updates/deletes keyed by `doc_id` landed in v0.4. The [MCP server + Claude
+skill](#use-with-claude-mcp--skill) landed in v0.3; the [evaluation
+harness](#evaluation) (text-only / pixel-only / hybrid on one corpus) landed in
+v0.2.
 
 ## Acknowledgements
 

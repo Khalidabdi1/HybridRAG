@@ -23,8 +23,9 @@ models are opt-in.
 - **MCP tools** (preferred inside Claude) — the `hybridrag` server exposes
   `hybridrag_search`, `hybridrag_add_text`, `hybridrag_add_html`,
   `hybridrag_update_text`, `hybridrag_delete`, `hybridrag_list_docs`,
-  `hybridrag_stats`, and `hybridrag_cost`. Configured via `.mcp.json`; the index
-  lives in `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
+  `hybridrag_stats`, `hybridrag_cost`, and `hybridrag_richness`. Configured via
+  `.mcp.json`; the index lives in `$HYBRIDRAG_STORAGE` (default
+  `.hybridrag_index`).
 - **CLI** — for screenshot/PDF ingestion and serving, which need extra
   dependencies.
 
@@ -51,6 +52,15 @@ pages be?" — call `hybridrag_cost` (optionally with `project_pages`). It retur
 vector + artifact bytes, indexing and per-query $ for text vs vision vs hybrid,
 and a storage projection that quantifies why pixel-only RAG is far pricier.
 
+**Selective pixel indexing.** HybridRAG renders + tiles + embeds a page into the
+vision index only when it's visually rich enough to earn it — prose, code, logs,
+and JSON stay text-only, saving storage and GPU. Call `hybridrag_richness` with a
+page's `text` and/or `html` to see the verdict (`index_pixels`, a richness
+`score`, the per-signal breakdown, and a `reason`) — useful for explaining why a
+code/log page should not be pixel-indexed while a financial-table page should.
+The `pixel_selection` config knob (`auto`/`always`/`never`) and the
+`--vision-selection` CLI flag control the policy at ingest time.
+
 ## CLI reference
 
 ```bash
@@ -64,6 +74,7 @@ hybridrag delete    --storage .idx --id doc1                               # rem
 hybridrag list-docs --storage .idx
 hybridrag eval      --dataset examples/datasets/sample.json               # text vs vision vs hybrid
 hybridrag cost      --storage .idx --project-pages 10000000               # storage + $/query model
+hybridrag richness  --file page.html                                      # selective-indexing verdict
 hybridrag stats     --storage .idx
 ```
 

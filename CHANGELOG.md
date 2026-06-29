@@ -3,6 +3,33 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] - 2026-06-29
+### Added
+- **Selective pixel indexing** (`hybridrag.pipeline.select`) — render, tile, and
+  embed a page into the vision index *only when it is visually rich enough to
+  earn it*, directly cutting Pixel RAG's two worst costs (storage and GPU) on
+  text-native pages (prose, code, logs, JSON) that the text index already covers.
+  - Two heuristic signal sources, cheapest first: `score_text_richness(text,
+    html)` reads extracted text/HTML **before** rendering (tabular rows, numeric
+    grids, column alignment, and media tags `<table>/<svg>/<canvas>/<img>/
+    <figure>/chart`) so a "no" skips rendering entirely; `score_image_richness`
+    scores a rendered page (numpy array / PIL image / PNG path) from ruled-line
+    density (tables), colour saturation (charts/figures), and mid-tone density
+    (photos) — the cues that survive only in pixels.
+  - `PixelSelector` applies the policy and returns a `SelectionDecision`
+    (`index_pixels`, `score`, per-signal breakdown, human-readable `reason`).
+  - Config: `pixel_selection` (`"auto"` / `"always"` / `"never"`),
+    `pixel_selection_threshold`, `pixel_selection_text_weight`. `"always"` keeps
+    classic Pixel RAG behaviour; `"never"` is text-only.
+  - Engine: `HybridRAG.should_index_pixels(text=, html=, image=)` and
+    `add_tiles_if_rich(...)`.
+  - CLI: `ingest-url` / `ingest-pdf` now skip the vision path for text-native
+    pages (with a `--vision-selection` override and a skipped-page count), and a
+    new `hybridrag richness` command inspects a page's score and decision.
+  - MCP: a `hybridrag_richness` tool so Claude can explain/simulate the decision.
+  - Runs on **numpy alone** (Pillow only needed to load an image from a path);
+    tests in `tests/test_select.py`.
+
 ## [0.6.0] - 2026-06-28
 ### Added
 - **Cross-encoder reranking of the fused candidate set** (`hybridrag.retrieve.rerank`)
