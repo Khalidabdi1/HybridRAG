@@ -7,6 +7,7 @@ Examples::
     hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf
     hybridrag add-text --storage .idx --id doc1 --file README.md --replace
     hybridrag search --storage .idx --query "revenue table" -k 5
+    hybridrag answer --storage .idx --query "what was Q3 revenue?"
     hybridrag delete --storage .idx --id doc1
     hybridrag list-docs --storage .idx
     hybridrag stats --storage .idx
@@ -174,6 +175,19 @@ def _cmd_search(args: argparse.Namespace) -> int:
             print(f"    {snippet}")
         if r.image_path:
             print(f"    image: {r.image_path} (page {r.page})")
+    return 0
+
+
+def _cmd_answer(args: argparse.Namespace) -> int:
+    engine = HybridRAG.load(args.storage)
+    modality = Modality(args.modality) if args.modality else None
+    ans = engine.answer(
+        args.query, top_k=args.k, modality=modality, rerank=args.rerank
+    )
+    if args.json:
+        print(json.dumps(ans.to_dict(), indent=2))
+        return 0
+    print(ans.formatted())
     return 0
 
 
@@ -368,6 +382,18 @@ def build_parser() -> argparse.ArgumentParser:
                     help="disable reranking even if the index config enables it")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_search)
+
+    sp = sub.add_parser("answer", help="retrieve and synthesize a grounded, cited answer")
+    add_storage(sp)
+    sp.add_argument("--query", required=True)
+    sp.add_argument("-k", type=int, default=5, help="hits to feed the reader")
+    sp.add_argument("--modality", choices=["text", "vision"], help="force one modality")
+    sp.add_argument("--rerank", dest="rerank", action="store_true", default=None,
+                    help="rerank the fused candidates before synthesis")
+    sp.add_argument("--no-rerank", dest="rerank", action="store_false",
+                    help="disable reranking even if the index config enables it")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_answer)
 
     sp = sub.add_parser("stats", help="print index stats")
     add_storage(sp)

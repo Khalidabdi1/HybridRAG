@@ -21,11 +21,11 @@ models are opt-in.
 ## When to use which surface
 
 - **MCP tools** (preferred inside Claude) — the `hybridrag` server exposes
-  `hybridrag_search`, `hybridrag_add_text`, `hybridrag_add_html`,
-  `hybridrag_update_text`, `hybridrag_delete`, `hybridrag_list_docs`,
-  `hybridrag_stats`, `hybridrag_cost`, and `hybridrag_richness`. Configured via
-  `.mcp.json`; the index lives in `$HYBRIDRAG_STORAGE` (default
-  `.hybridrag_index`).
+  `hybridrag_search`, `hybridrag_answer`, `hybridrag_add_text`,
+  `hybridrag_add_html`, `hybridrag_update_text`, `hybridrag_delete`,
+  `hybridrag_list_docs`, `hybridrag_stats`, `hybridrag_cost`, and
+  `hybridrag_richness`. Configured via `.mcp.json`; the index lives in
+  `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
 - **CLI** — for screenshot/PDF ingestion and serving, which need extra
   dependencies.
 
@@ -46,6 +46,15 @@ models are opt-in.
    shows what is currently indexed.
 
 Ground your answer in the returned `text`/`image_path` and cite `doc_id`.
+
+**Getting a cited answer in one call.** When the user asks a *question* (rather
+than for a list of passages), prefer `hybridrag_answer` over `hybridrag_search`:
+it retrieves and synthesizes a grounded answer whose every claim carries a `[n]`
+citation back to an indexed chunk (nothing is invented). It returns `text`,
+`citations` (with `doc_id`/`page`/`snippet`), and `visual_evidence` — relevant
+tables/charts that were retrieved but carry no readable text, which you may want
+to surface to the user. Accepts the same `modality` and `rerank` options as
+search.
 
 When the user asks what an index *costs* — storage, $/query, or "how big would N
 pages be?" — call `hybridrag_cost` (optionally with `project_pages`). It returns
@@ -69,6 +78,7 @@ hybridrag add-text  --storage .idx --id doc1 --file README.md --title Readme
 hybridrag ingest-url --storage .idx --id wiki --url https://example.com   # needs [render]
 hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf            # needs [render]
 hybridrag search    --storage .idx --query "revenue table" -k 5
+hybridrag answer    --storage .idx --query "what was Q3 revenue?"          # grounded, cited answer
 hybridrag add-text  --storage .idx --id doc1 --file README.md --replace    # upsert in place
 hybridrag delete    --storage .idx --id doc1                               # remove a document
 hybridrag list-docs --storage .idx

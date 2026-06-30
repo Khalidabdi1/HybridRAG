@@ -92,6 +92,41 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "hybridrag_answer",
+        "description": (
+            "Retrieve from the HybridRAG index AND synthesize a grounded, cited "
+            "answer to a question in one call (the RAG 'final readout'). The "
+            "default extractive reader composes the answer only from sentences "
+            "that appear in indexed chunks — every claim carries a [n] citation "
+            "and nothing is hallucinated. Relevant tables/charts with no readable "
+            "text are returned as `visual_evidence`. Prefer this over "
+            "`hybridrag_search` when the user asks a question rather than for a "
+            "list of passages."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language question."},
+                "top_k": {
+                    "type": "integer",
+                    "description": "How many fused hits to feed the reader (default 5).",
+                    "minimum": 1,
+                    "maximum": 20,
+                },
+                "modality": {
+                    "type": "string",
+                    "enum": ["text", "vision"],
+                    "description": "Optional: force a single modality.",
+                },
+                "rerank": {
+                    "type": "boolean",
+                    "description": "Optional: rerank fused candidates before synthesis.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "hybridrag_add_text",
         "description": (
             "Chunk and index a raw text document into the text modality. "
@@ -243,6 +278,16 @@ def _tool_search(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _tool_answer(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    query = args.get("query", "")
+    if not query:
+        raise ValueError("`query` is required")
+    top_k = int(args.get("top_k") or engine.config.answer_top_k)
+    modality = Modality(args["modality"]) if args.get("modality") else None
+    ans = engine.answer(query, top_k=top_k, modality=modality, rerank=args.get("rerank"))
+    return ans.to_dict()
+
+
 def _tool_add_text(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     doc_id = args.get("doc_id")
     text = args.get("text")
@@ -324,6 +369,7 @@ def _tool_richness(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
 
 _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_search": _tool_search,
+    "hybridrag_answer": _tool_answer,
     "hybridrag_richness": _tool_richness,
     "hybridrag_add_text": _tool_add_text,
     "hybridrag_add_html": _tool_add_html,
