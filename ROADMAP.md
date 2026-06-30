@@ -65,10 +65,19 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       richness` CLI command, and a `hybridrag_richness` MCP tool. Directly cuts
       storage and GPU on code/log/JSON/prose pages.
 
+## Done (v0.8.0)
+- [x] **Hybrid answer synthesis** (`hybridrag.synth`) — the RAG "final readout"
+      as a pluggable step. A dependency-free `ExtractiveReader` selects the best
+      sentences from retrieved chunks (BM25) and returns a grounded, **cited**
+      answer that never hallucinates, with relevant figures surfaced as
+      `visual_evidence`; an opt-in `LLMReader` wraps any Claude/Qwen-VL callable
+      and feeds it the top text chunks + tile images over the bounded hit set.
+      `HybridRAG.answer()`, a `hybridrag answer` CLI command, and a
+      `hybridrag_answer` MCP tool.
+
 ## Next
 - [ ] **Qwen-VL embedding adapter** with batched GPU inference.
 - [ ] **Async / batched ingestion** for large corpora.
-- [ ] **Hybrid answer synthesis** — feed top text + top tiles to a VLM reader.
 - [ ] **Benchmarks & screenshots** from a real corpus in the README.
 
 ## Ideas / research

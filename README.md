@@ -67,8 +67,8 @@ A document flows down **two parallel pipelines**:
                          │ PIXEL:  render  → tile  → vision-embed → index │──┤
                          └───────────────────────────────────────────────┘  │
                                                                              ▼
-        Query ──► Router (per-modality weights) ──► search both ──► RRF Fusion ──► Rerank* ──► Results
-                                                                              (*optional BM25 / cross-encoder)
+        Query ──► Router (per-modality weights) ──► search both ──► RRF Fusion ──► Rerank* ──► Reader* ──► Answer
+                                                                  (*optional BM25/cross-encoder)  (*extractive / LLM-VLM)
 ```
 
 ## Quickstart
@@ -93,6 +93,16 @@ rag.add_text("fin", "The chart and table show quarterly revenue growth ...", tit
 # Search — both modalities are queried and fused
 for hit in rag.search("how is python typed?", top_k=3):
     print(hit.doc_id, round(hit.score, 4), hit.components)
+
+# Or get a grounded, *cited* answer in one call (the RAG "final readout").
+# The default extractive reader runs on numpy alone and never hallucinates —
+# every span comes from an indexed chunk, with a [n] citation.
+ans = rag.answer("how is python typed?")
+print(ans.formatted())
+#  Python is dynamically typed and garbage-collected ... [1]
+#
+#  Sources:
+#    [1] (text) doc=py — Python is dynamically typed and garbage-collected ...
 ```
 
 The same `rag` can index image tiles too:
@@ -146,6 +156,12 @@ hybridrag richness   --file page.html        #  -> INDEX or SKIP pixels + why
 
 # Search (fused). Force a single modality with --modality text|vision
 hybridrag search     --storage .idx --query "quarterly revenue table" -k 5
+
+# Answer a question — retrieve AND synthesize a grounded, cited answer
+hybridrag answer     --storage .idx --query "what was Q3 revenue?"
+#  Quarterly revenue grew to 4.2 billion dollars on strong cloud demand. [1]
+#  Sources:
+#    [1] (text) doc=report p.3 — Quarterly revenue grew to 4.2 billion dollars ...
 hybridrag stats      --storage .idx
 
 # Incremental updates — re-embed only the doc that changed, not the corpus
@@ -190,6 +206,7 @@ The server exposes these tools over a persistent index (set by
 | Tool | Purpose |
 | --- | --- |
 | `hybridrag_search` | Fused text+pixel search; force a modality with `modality`. |
+| `hybridrag_answer` | Retrieve **and** synthesize a grounded, cited answer (no hallucination; figures returned as `visual_evidence`). |
 | `hybridrag_add_text` | Chunk and index a raw text document. |
 | `hybridrag_add_html` | Extract text from HTML, then chunk and index it. |
 | `hybridrag_update_text` | Replace a document in place — re-embed only that `doc_id`. |
@@ -386,6 +403,39 @@ hybridrag richness --text "def foo(): return 1"       # SKIP pixels (score≈0.0
 hybridrag richness --file quarterly_report.html       # INDEX pixels (score≈0.95) — it's a table
 ```
 
+### 7. Answer synthesis (the "final readout")
+Retrieval returns passages; a RAG system has to *read* them and answer. In Pixel
+RAG that readout always means a VLM call over screenshots — the single most
+expensive step. HybridRAG makes the readout a **pluggable** step with a cheap,
+honest default ([`synth/reader.py`](src/hybridrag/synth/reader.py)):
+
+- **`ExtractiveReader`** (default, **numpy alone**) — ranks the sentences inside
+  the retrieved chunks by BM25 against the query, stitches the best few into a
+  short answer, and attaches a `[n]` citation to each. Because every span is
+  copied verbatim from an indexed chunk, there is *nothing to hallucinate*.
+  Relevant tables/charts that carry no readable text come back as
+  `visual_evidence` so the caller can still surface the figure.
+- **`LLMReader`** (opt-in) — wrap any `generate(prompt, image_paths) -> str`
+  callable (Claude, Qwen-VL, a local model). It builds a grounded,
+  citation-instructed prompt from the top text chunks **and** passes the top tile
+  images through for a VLM to read — but only ever for the handful of fused hits,
+  so the heavy model's cost stays bounded.
+
+```python
+ans = rag.answer("what was Q3 revenue?")          # default: extractive, cited, free
+print(ans.text)        #  "Quarterly revenue grew to 4.2 billion dollars ... [1]"
+print(ans.citations)   #  [Citation(marker=1, doc_id='report', page=3, ...)]
+
+# Or hand in a real model for generated synthesis over the same hits:
+from hybridrag.synth import LLMReader
+def claude(prompt, image_paths): ...               # your Claude/Qwen-VL call
+ans = rag.answer("summarise the revenue chart", reader=LLMReader(claude))
+```
+
+```bash
+hybridrag answer --storage .idx --query "what was Q3 revenue?"
+```
+
 ## Project layout
 
 ```
@@ -397,6 +447,7 @@ src/hybridrag/
 ├── index/              # VectorStore (numpy / FAISS)
 ├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile) + select (selective pixel indexing)
 ├── retrieve/           # router (per-query weights) + fusion (RRF) + rerank (BM25/cross-encoder)
+├── synth/              # answer synthesis: extractive (no deps) + LLM/VLM reader (the "final readout")
 ├── eval/               # metrics, datasets, harness, cost model (text vs vision vs hybrid)
 ├── serve/              # FastAPI search API
 ├── mcp_server.py       # MCP server for Claude (`hybridrag-mcp`)
@@ -418,8 +469,10 @@ ruff check .
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Near-term: async batched ingestion, a real Qwen-VL
-embedding adapter, and hybrid answer synthesis. [Selective pixel
+See [ROADMAP.md](ROADMAP.md). Near-term: async batched ingestion and a real
+Qwen-VL embedding adapter. [Answer synthesis](#7-answer-synthesis-the-final-readout)
+— a grounded, cited readout with a dependency-free extractive default and a
+pluggable LLM/VLM reader — landed in v0.8. [Selective pixel
 indexing](#6-selective-pixel-indexing-ingest-time) — index pixels only for
 visually rich pages — landed in v0.7; [cross-encoder reranking](#4-reranking-optional)
 of fused results in v0.6. The [cost & storage model](#cost--storage-model)

@@ -44,6 +44,20 @@ def test_search_requires_query(engine):
         call_tool("hybridrag_search", {}, engine=engine)
 
 
+def test_answer_returns_grounded_cited_answer(engine):
+    out = call_tool("hybridrag_answer", {"query": "quarterly revenue growth"}, engine=engine)
+    assert out["query"] == "quarterly revenue growth"
+    assert out["text"]
+    assert out["reader"] == "extractive"
+    assert out["citations"]
+    assert out["citations"][0]["doc_id"] in {"doc1", "doc2"}
+
+
+def test_answer_requires_query(engine):
+    with pytest.raises(ValueError):
+        call_tool("hybridrag_answer", {}, engine=engine)
+
+
 def test_search_force_modality(engine):
     out = call_tool("hybridrag_search", {"query": "logging", "modality": "text"}, engine=engine)
     assert all(r["modality"] == "text" for r in out["results"])

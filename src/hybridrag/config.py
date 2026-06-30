@@ -55,6 +55,14 @@ class HybridConfig:
     rerank_top_n: int = 30  # how many fused candidates to rerank (fetch this many first)
     rerank_blend: float = 0.5  # weight on the reranker score vs the fusion score [0..1]
 
+    # ---- answer synthesis (the "final readout") ----
+    # Compose a grounded, cited answer from the fused hits. "extractive" (default,
+    # no deps) selects the best sentences from retrieved chunks; "none" disables
+    # synthesis (search only). A real LLM/VLM reader is passed in code.
+    reader_model: str = "extractive"  # "extractive" (no deps) | "none"
+    answer_max_sentences: int = 3  # sentences the extractive reader stitches together
+    answer_top_k: int = 5  # how many fused hits to feed the reader
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod

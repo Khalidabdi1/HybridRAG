@@ -28,6 +28,7 @@ from .pipeline.select import SelectionDecision, build_selector
 from .retrieve.fusion import reciprocal_rank_fusion
 from .retrieve.rerank import build_reranker, rerank_results
 from .retrieve.router import route
+from .synth.reader import Answer, Reader, build_reader
 from .types import Chunk, Modality, SearchResult, Tile
 
 
@@ -40,6 +41,7 @@ class HybridRAG:
         self.vision_store = VectorStore(dim=self.vision_embedder.dim)
         self.reranker = build_reranker(self.config)
         self.selector = build_selector(self.config)
+        self.reader = build_reader(self.config)
 
     # ------------------------------------------------------------------ ingest
     def add_chunks(self, chunks: List[Chunk]) -> int:
@@ -243,6 +245,33 @@ class HybridRAG:
                 reranker, query, fused, blend=self.config.rerank_blend
             )
         return fused[:top_k]
+
+    # ------------------------------------------------------------------ answer
+    def answer(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        modality: Optional[Modality] = None,
+        rerank: Optional[bool] = None,
+        reader: Optional[Reader] = None,
+    ) -> Answer:
+        """Retrieve, then synthesize a grounded, cited answer (the RAG readout).
+
+        Runs :meth:`search` and feeds the top hits to a
+        :class:`~hybridrag.synth.reader.Reader`. The default
+        :class:`~hybridrag.synth.reader.ExtractiveReader` runs on numpy alone and
+        never hallucinates — every span in the answer comes from an indexed
+        chunk, with a citation. Pass a
+        :class:`~hybridrag.synth.reader.LLMReader` (wrapping a Claude/Qwen-VL
+        callable) as ``reader`` to get model-written synthesis over the same
+        bounded set of hits, including the retrieved tile images.
+        """
+        reader = reader if reader is not None else self.reader
+        if reader is None:
+            reader = build_reader(self.config.with_overrides(reader_model="extractive"))
+        fetch = top_k or self.config.answer_top_k
+        results = self.search(query, top_k=fetch, modality=modality, rerank=rerank)
+        return reader.synthesize(query, results)
 
     # ------------------------------------------------------------- persistence
     def save(self, directory: Optional[str] = None) -> str:

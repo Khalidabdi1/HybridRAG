@@ -3,6 +3,32 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.8.0] - 2026-06-30
+### Added
+- **Hybrid answer synthesis** (`hybridrag.synth`) — the RAG "final readout" that
+  turns fused search hits into a grounded, *cited* answer, making it a pluggable
+  step instead of an always-on VLM call (Pixel RAG's most expensive operation).
+  - `ExtractiveReader` (default, **numpy alone**) ranks the sentences inside the
+    retrieved chunks by BM25 against the query, stitches the best few into a short
+    answer, and attaches a `[n]` citation to each span. Every word is copied
+    verbatim from an indexed chunk, so there is nothing to hallucinate. Relevant
+    tables/charts with no readable text are returned as `visual_evidence` so a
+    caller can still surface the figure.
+  - `LLMReader` (opt-in) wraps any `generate(prompt, image_paths) -> str`
+    callable (Claude, Qwen-VL, a local model). It builds a grounded,
+    citation-instructed prompt from the top text chunks and passes the top tile
+    images through for a VLM to read — only ever over the handful of fused hits,
+    so the heavy model's cost stays bounded.
+  - `Answer` / `Citation` dataclasses with `to_dict()` and a `formatted()`
+    human-readable rendering (answer + numbered source list).
+  - Engine: `HybridRAG.answer(query, top_k=, modality=, rerank=, reader=)`
+    retrieves then synthesizes; an explicit `reader=` overrides config.
+  - Config: `reader_model` (`"extractive"` / `"none"`), `answer_max_sentences`,
+    `answer_top_k`.
+  - CLI: `hybridrag answer --query ...` (with `--json`, `--modality`, `--rerank`).
+  - MCP: a `hybridrag_answer` tool so Claude gets a cited answer in one call.
+  - Tests: `tests/test_synth.py`.
+
 ## [0.7.0] - 2026-06-29
 ### Added
 - **Selective pixel indexing** (`hybridrag.pipeline.select`) — render, tile, and

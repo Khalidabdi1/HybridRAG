@@ -41,6 +41,15 @@ def main() -> None:
                 print(f"      {r.text[:90]}...")
         print()
 
+    # The "final readout": retrieve AND synthesize a grounded, cited answer.
+    # The default extractive reader runs on numpy alone and never hallucinates.
+    print("=== Answer synthesis ===")
+    for query in ["how is python typed?", "what do the financial statements report?"]:
+        ans = rag.answer(query)
+        print(f"Q: {query}")
+        print(ans.formatted())
+        print()
+
 
 if __name__ == "__main__":
     main()
