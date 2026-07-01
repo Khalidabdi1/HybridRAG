@@ -161,7 +161,7 @@ def test_stats_to_dict_and_throughput():
 
 @pytest.fixture()
 def rich_png(tmp_path):
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")  # render extra; suite runs on numpy alone
 
     arr = np.random.randint(0, 255, (400, 600, 3), dtype=np.uint8)
     arr[::20, :, :] = 0  # ruled lines -> reads as tabular/rich
@@ -172,7 +172,7 @@ def rich_png(tmp_path):
 
 @pytest.fixture()
 def plain_png(tmp_path):
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")  # render extra; suite runs on numpy alone
 
     path = tmp_path / "plain.png"
     Image.fromarray(np.full((400, 600, 3), 250, dtype=np.uint8)).save(path)
