@@ -22,10 +22,10 @@ models are opt-in.
 
 - **MCP tools** (preferred inside Claude) — the `hybridrag` server exposes
   `hybridrag_search`, `hybridrag_answer`, `hybridrag_add_text`,
-  `hybridrag_add_html`, `hybridrag_update_text`, `hybridrag_delete`,
-  `hybridrag_list_docs`, `hybridrag_stats`, `hybridrag_cost`, and
-  `hybridrag_richness`. Configured via `.mcp.json`; the index lives in
-  `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
+  `hybridrag_add_html`, `hybridrag_add_batch`, `hybridrag_update_text`,
+  `hybridrag_delete`, `hybridrag_list_docs`, `hybridrag_stats`,
+  `hybridrag_cost`, and `hybridrag_richness`. Configured via `.mcp.json`; the
+  index lives in `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
 - **CLI** — for screenshot/PDF ingestion and serving, which need extra
   dependencies.
 
@@ -33,7 +33,10 @@ models are opt-in.
 
 1. `hybridrag_stats` — see whether an index already exists and how big it is.
 2. `hybridrag_add_text` / `hybridrag_add_html` — index documents (each call
-   persists). Pass a stable `doc_id` so re-indexing is traceable.
+   persists). Pass a stable `doc_id` so re-indexing is traceable. For **many
+   documents at once**, prefer `hybridrag_add_batch` (a `documents` list of
+   `{doc_id, text|html, title?}`): chunks are embedded in batches, so it is far
+   cheaper than one add call per document. Set `replace: true` to upsert.
 3. `hybridrag_search` — query. Returns fused, ranked hits with per-modality
    `components`. Set `modality: "text"` or `"vision"` to force one; omit to let
    the router blend both. Prefer text-only for code, logs, and JSON. Pass
@@ -77,6 +80,7 @@ pip install -e ".[mcp]"                 # MCP server deps
 hybridrag add-text  --storage .idx --id doc1 --file README.md --title Readme
 hybridrag ingest-url --storage .idx --id wiki --url https://example.com   # needs [render]
 hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf            # needs [render]
+hybridrag ingest-batch --storage .idx --manifest corpus.jsonl --batch-size 128 --workers 4  # large corpora
 hybridrag search    --storage .idx --query "revenue table" -k 5
 hybridrag answer    --storage .idx --query "what was Q3 revenue?"          # grounded, cited answer
 hybridrag add-text  --storage .idx --id doc1 --file README.md --replace    # upsert in place

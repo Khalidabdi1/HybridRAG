@@ -75,9 +75,22 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       `HybridRAG.answer()`, a `hybridrag answer` CLI command, and a
       `hybridrag_answer` MCP tool.
 
+## Done (v0.9.0)
+- [x] **Batched & parallel ingestion for large corpora**
+      (`hybridrag.pipeline.ingest`) — `BatchIngestor` buffers prepared chunks and
+      tiles *across* documents and flushes them to the store in fixed-size
+      embedding batches (the shape a batched GPU encoder needs), while
+      per-document prep (HTML→text, chunking, tiling, the selective-pixel
+      decision) runs on a thread pool so the next document is prepared while the
+      current batch embeds. Store writes stay single-threaded and in input order,
+      so batched output is byte-for-byte identical to serial. `IngestDoc` /
+      `IngestStats`, `HybridRAG.add_documents(...)`, a `hybridrag ingest-batch`
+      CLI command (JSON/JSONL manifest, `--batch-size` / `--workers` / `--replace`),
+      and a `hybridrag_add_batch` MCP tool. Directly attacks disadvantage #2
+      (slow indexing). Runs on numpy alone.
+
 ## Next
 - [ ] **Qwen-VL embedding adapter** with batched GPU inference.
-- [ ] **Async / batched ingestion** for large corpora.
 - [ ] **Benchmarks & screenshots** from a real corpus in the README.
 
 ## Ideas / research

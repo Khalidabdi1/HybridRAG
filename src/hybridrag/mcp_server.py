@@ -159,6 +159,46 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "hybridrag_add_batch",
+        "description": (
+            "Index MANY text documents in one batched call — the fast path for a "
+            "corpus. Pass `documents`: a list of objects, each with a `doc_id` and "
+            "`text` (or `html`) plus an optional `title`. Chunks are buffered "
+            "across documents and embedded in batches, so this is far cheaper than "
+            "one add_text call per document. Set `replace` to upsert (delete any "
+            "existing units for each doc_id first). Persists the index."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "documents": {
+                    "type": "array",
+                    "description": "Documents to index.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "doc_id": {"type": "string"},
+                            "text": {"type": "string"},
+                            "html": {"type": "string"},
+                            "title": {"type": "string"},
+                        },
+                        "required": ["doc_id"],
+                    },
+                },
+                "batch_size": {
+                    "type": "integer",
+                    "description": "Units per embedding batch (default 128).",
+                    "minimum": 1,
+                },
+                "replace": {
+                    "type": "boolean",
+                    "description": "Upsert: delete existing units for each doc_id first.",
+                },
+            },
+            "required": ["documents"],
+        },
+    },
+    {
         "name": "hybridrag_delete",
         "description": (
             "Delete every text chunk and image tile belonging to a document id. "
@@ -308,6 +348,25 @@ def _tool_add_html(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     return {"doc_id": doc_id, "chunks_added": n, "storage": engine.config.storage_dir}
 
 
+def _tool_add_batch(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    documents = args.get("documents")
+    if not documents or not isinstance(documents, list):
+        raise ValueError("`documents` must be a non-empty list")
+    for d in documents:
+        if not isinstance(d, dict) or not d.get("doc_id"):
+            raise ValueError("each document needs a `doc_id`")
+        if d.get("text") is None and d.get("html") is None:
+            raise ValueError(f"document {d.get('doc_id')!r} needs `text` or `html`")
+    batch_size = int(args.get("batch_size") or 128)
+    stats = engine.add_documents(
+        documents, batch_size=batch_size, upsert=bool(args.get("replace"))
+    )
+    engine.save()
+    out = stats.to_dict()
+    out["storage"] = engine.config.storage_dir
+    return out
+
+
 def _tool_delete(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     doc_id = args.get("doc_id")
     if not doc_id:
@@ -373,6 +432,7 @@ _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_richness": _tool_richness,
     "hybridrag_add_text": _tool_add_text,
     "hybridrag_add_html": _tool_add_html,
+    "hybridrag_add_batch": _tool_add_batch,
     "hybridrag_delete": _tool_delete,
     "hybridrag_update_text": _tool_update_text,
     "hybridrag_list_docs": _tool_list_docs,

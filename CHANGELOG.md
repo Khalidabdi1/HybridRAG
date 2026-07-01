@@ -3,6 +3,36 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.9.0] - 2026-07-01
+### Added
+- **Batched & parallel ingestion for large corpora** (`hybridrag.pipeline.ingest`)
+  — directly attacks disadvantage #2 (indexing is slow). The naive engine path
+  embeds one document at a time (`add_text` → one `encode()` per document), which
+  wastes a real encoder's throughput; `BatchIngestor` amortizes it.
+  - **Batched embedding.** Prepared chunks and tiles are buffered *across*
+    documents and flushed to the vector store in fixed-size batches, so each
+    `encode()` call sees `batch_size` units — the exact shape a batched GPU
+    encoder wants, and it cuts per-call overhead on the numpy fallback too.
+  - **Parallel preparation.** Per-document prep (HTML→text, chunking, tiling
+    metadata, the selective-pixel richness decision) runs on a `ThreadPoolExecutor`
+    with a bounded look-ahead window, so the next document is prepared while the
+    current batch embeds. Store writes stay single-threaded and in input order, so
+    batched output is **byte-for-byte identical** to serial ingestion.
+  - `IngestDoc` (text / html / image_paths / title / meta, with `from_dict`) and
+    `IngestStats` (documents, chunks/tiles added, vision_skipped, batch counts,
+    seconds, docs/s) dataclasses. Selective pixel indexing applies per document,
+    and `upsert=True` re-embeds only changed `doc_id`s.
+  - Engine: `HybridRAG.add_documents(docs, batch_size=, vision_batch_size=,
+    max_workers=, upsert=, on_progress=)`.
+  - CLI: `hybridrag ingest-batch --manifest <JSON array | JSONL>` with
+    `--batch-size`, `--workers`, `--replace`, `--vision-selection`, `--json`, and
+    a streaming progress line.
+  - MCP: a `hybridrag_add_batch` tool so Claude can index a whole corpus in one
+    batched call.
+  - Tests: `tests/test_ingest.py` (batching, serial/parallel equivalence,
+    equivalence with `add_text`, html, meta, upsert, progress, the vision path +
+    selection) plus `hybridrag_add_batch` MCP tests.
+
 ## [0.8.0] - 2026-06-30
 ### Added
 - **Hybrid answer synthesis** (`hybridrag.synth`) — the RAG "final readout" that
