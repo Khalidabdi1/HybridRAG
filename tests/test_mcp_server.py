@@ -127,6 +127,33 @@ def test_list_docs_tool(engine):
     assert set(out["doc_ids"]) == {"doc1", "doc2"}
 
 
+def test_add_batch_tool_indexes_many(engine):
+    docs = [{"doc_id": f"b{i}", "text": f"batched topic {i % 2} body " * 10} for i in range(12)]
+    out = call_tool("hybridrag_add_batch", {"documents": docs, "batch_size": 4}, engine=engine)
+    assert out["documents"] == 12
+    assert out["chunks_added"] >= 12
+    assert out["text_batches"] >= 1
+    listed = call_tool("hybridrag_list_docs", {}, engine=engine)
+    assert "b0" in listed["doc_ids"] and listed["count"] == 14  # 2 fixture + 12
+
+
+def test_add_batch_tool_replace(engine):
+    call_tool("hybridrag_add_batch",
+              {"documents": [{"doc_id": "doc1", "text": "rewritten about penguins " * 10}],
+               "replace": True}, engine=engine)
+    res = call_tool("hybridrag_search", {"query": "penguins", "modality": "text"}, engine=engine)
+    assert res["results"] and res["results"][0]["doc_id"] == "doc1"
+
+
+def test_add_batch_tool_validates(engine):
+    with pytest.raises(ValueError):
+        call_tool("hybridrag_add_batch", {"documents": []}, engine=engine)
+    with pytest.raises(ValueError):
+        call_tool("hybridrag_add_batch", {"documents": [{"text": "no id"}]}, engine=engine)
+    with pytest.raises(ValueError):
+        call_tool("hybridrag_add_batch", {"documents": [{"doc_id": "x"}]}, engine=engine)
+
+
 def test_unknown_tool_raises(engine):
     with pytest.raises(KeyError):
         call_tool("nope", {}, engine=engine)

@@ -135,6 +135,39 @@ class HybridRAG:
     def add_html(self, doc_id: str, html: str, title: str = "") -> int:
         return self.add_text(doc_id, html_to_text(html), title=title)
 
+    def add_documents(
+        self,
+        docs,
+        batch_size: int = 128,
+        vision_batch_size: Optional[int] = None,
+        max_workers: int = 1,
+        upsert: bool = False,
+        on_progress=None,
+    ):
+        """Batch-ingest many documents, embedding in ``batch_size`` batches.
+
+        Each item is an :class:`~hybridrag.pipeline.ingest.IngestDoc` (or a dict
+        with ``doc_id`` + ``text``/``html`` and optional ``image_paths``). Chunks
+        and tiles are buffered across documents and flushed to the stores in
+        batches — the shape a real (GPU) encoder needs — while document
+        preparation runs on ``max_workers`` threads. This is the fast path for
+        large corpora; the naive :meth:`add_text` embeds one document at a time.
+
+        Returns an :class:`~hybridrag.pipeline.ingest.IngestStats`. Does not
+        persist — call :meth:`save` once afterwards.
+        """
+        from .pipeline.ingest import BatchIngestor
+
+        ingestor = BatchIngestor(
+            self,
+            batch_size=batch_size,
+            vision_batch_size=vision_batch_size,
+            max_workers=max_workers,
+            upsert=upsert,
+            on_progress=on_progress,
+        )
+        return ingestor.ingest(docs)
+
     # ------------------------------------------------------------ update/delete
     def delete(self, doc_id: str) -> dict:
         """Remove all text chunks and image tiles belonging to ``doc_id``.

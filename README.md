@@ -151,6 +151,13 @@ hybridrag ingest-url --storage .idx --id wiki --url https://en.wikipedia.org/wik
 hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf
 hybridrag ingest-pdf --storage .idx --id paper --pdf paper.pdf --vision-selection always
 
+# Batch-ingest a whole corpus from a manifest (JSON array or JSONL). Chunks are
+# embedded in batches while documents are prepared on worker threads — the fast
+# path for large corpora (addresses the "indexing is slow" cost of pixel RAG).
+hybridrag ingest-batch --storage .idx --manifest corpus.jsonl --batch-size 128 --workers 4
+#   {"doc_id": "a", "text": "..."}                         # one object per line
+#   {"doc_id": "b", "html": "<table>...</table>", "image_paths": ["b.png"]}
+
 # Inspect the selective-indexing decision for a page (no index needed)
 hybridrag richness   --file page.html        #  -> INDEX or SKIP pixels + why
 
@@ -209,6 +216,7 @@ The server exposes these tools over a persistent index (set by
 | `hybridrag_answer` | Retrieve **and** synthesize a grounded, cited answer (no hallucination; figures returned as `visual_evidence`). |
 | `hybridrag_add_text` | Chunk and index a raw text document. |
 | `hybridrag_add_html` | Extract text from HTML, then chunk and index it. |
+| `hybridrag_add_batch` | Index many documents in one batched call — the fast path for a corpus. |
 | `hybridrag_update_text` | Replace a document in place — re-embed only that `doc_id`. |
 | `hybridrag_delete` | Remove every unit belonging to a `doc_id`. |
 | `hybridrag_list_docs` | List the distinct document ids in the index. |
@@ -436,6 +444,36 @@ ans = rag.answer("summarise the revenue chart", reader=LLMReader(claude))
 hybridrag answer --storage .idx --query "what was Q3 revenue?"
 ```
 
+### 8. Batched ingestion (large corpora)
+Indexing is Pixel/Hybrid RAG's slowest phase: every page is extracted, chunked,
+optionally rendered + tiled, then embedded. The naive path embeds **one document
+at a time** — an `encode()` call per document — which throws away a real
+encoder's throughput, since a GPU model amortizes almost all of its cost over the
+batch. [`BatchIngestor`](src/hybridrag/pipeline/ingest.py) fixes both halves:
+
+- **Batched embedding.** Prepared chunks and tiles are buffered *across*
+  documents and flushed to the store in fixed-size batches, so each `encode()`
+  sees `batch_size` units — the exact shape a batched GPU encoder wants.
+- **Parallel preparation.** Per-document prep (HTML→text, chunking, tiling
+  metadata, the selective-pixel decision) runs on a small thread pool, so the
+  next document is prepared while the current batch embeds. Store writes stay
+  single-threaded and in input order, so the result is **byte-for-byte identical**
+  to serial ingestion — just faster.
+
+```python
+stats = rag.add_documents(
+    [{"doc_id": "a", "text": "..."},
+     {"doc_id": "b", "html": "<table>...</table>", "image_paths": ["b.png"]}],
+    batch_size=128, max_workers=4, upsert=False,
+)
+print(stats.to_dict())   # documents, chunks_added, tiles_added, text_batches, docs_per_second
+rag.save()               # persist once, not per document
+```
+
+The same path is exposed as `hybridrag ingest-batch --manifest ...` and the
+`hybridrag_add_batch` MCP tool. Selective pixel indexing still applies per
+document, so text-native pages in the corpus never pay the vision cost.
+
 ## Project layout
 
 ```
@@ -445,7 +483,7 @@ src/hybridrag/
 ├── types.py            # Chunk, Tile, Document, SearchResult, Modality
 ├── embed/              # text & vision encoders (+ hashing fallback)
 ├── index/              # VectorStore (numpy / FAISS)
-├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile) + select (selective pixel indexing)
+├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile) + select (selective pixel indexing) + ingest (batched/parallel)
 ├── retrieve/           # router (per-query weights) + fusion (RRF) + rerank (BM25/cross-encoder)
 ├── synth/              # answer synthesis: extractive (no deps) + LLM/VLM reader (the "final readout")
 ├── eval/               # metrics, datasets, harness, cost model (text vs vision vs hybrid)
@@ -469,8 +507,10 @@ ruff check .
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Near-term: async batched ingestion and a real
-Qwen-VL embedding adapter. [Answer synthesis](#7-answer-synthesis-the-final-readout)
+See [ROADMAP.md](ROADMAP.md). Near-term: a real Qwen-VL embedding adapter with
+batched GPU inference. [Batched ingestion](#8-batched-ingestion-large-corpora) —
+buffer-and-batch embedding with parallel document prep — landed in v0.9.
+[Answer synthesis](#7-answer-synthesis-the-final-readout)
 — a grounded, cited readout with a dependency-free extractive default and a
 pluggable LLM/VLM reader — landed in v0.8. [Selective pixel
 indexing](#6-selective-pixel-indexing-ingest-time) — index pixels only for

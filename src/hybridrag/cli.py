@@ -155,6 +155,73 @@ def _cmd_ingest_pdf(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_manifest(path: str) -> List[dict]:
+    """Load a batch manifest: a JSON array file, or JSONL (one object per line)."""
+    with open(path, "r", encoding="utf-8") as fh:
+        content = fh.read()
+    stripped = content.lstrip()
+    if stripped.startswith("["):
+        data = json.loads(content)
+        if not isinstance(data, list):
+            raise ValueError("JSON manifest must be an array of document objects")
+        return data
+    docs = []
+    for line in content.splitlines():
+        line = line.strip()
+        if line:
+            docs.append(json.loads(line))
+    return docs
+
+
+def _cmd_ingest_batch(args: argparse.Namespace) -> int:
+    engine = _load_or_new(args.storage)
+    if args.vision_selection:
+        engine.config.pixel_selection = args.vision_selection
+        engine.selector = engine.selector.__class__(
+            mode=args.vision_selection,
+            threshold=engine.config.pixel_selection_threshold,
+            text_weight=engine.config.pixel_selection_text_weight,
+        )
+    docs = _read_manifest(args.manifest)
+    total = len(docs)
+
+    last = [0.0]
+
+    def progress(stats):
+        # Print a throughput line every ~10% so large runs show life.
+        frac = stats.documents / total if total else 1.0
+        if frac - last[0] >= 0.1 or stats.documents == total:
+            last[0] = frac
+            print(
+                f"  {stats.documents}/{total} docs  "
+                f"{stats.chunks_added} chunks  {stats.tiles_added} tiles  "
+                f"{stats.docs_per_second:.0f} docs/s",
+                file=sys.stderr,
+            )
+
+    stats = engine.add_documents(
+        docs,
+        batch_size=args.batch_size,
+        max_workers=args.workers,
+        upsert=args.replace,
+        on_progress=progress if not args.json else None,
+    )
+    engine.save(args.storage)
+    if args.json:
+        print(json.dumps(stats.to_dict(), indent=2))
+    else:
+        d = stats.to_dict()
+        print(
+            f"Ingested {d['documents']} document(s): {d['chunks_added']} chunk(s), "
+            f"{d['tiles_added']} tile(s)"
+            + (f", {d['vision_skipped']} text-native page(s) skipped for vision"
+               if d['vision_skipped'] else "")
+            + f" in {d['seconds']}s ({d['docs_per_second']:.0f} docs/s, "
+            f"{d['text_batches']} text + {d['vision_batches']} vision batch(es))"
+        )
+    return 0
+
+
 def _cmd_search(args: argparse.Namespace) -> int:
     engine = HybridRAG.load(args.storage)
     modality = Modality(args.modality) if args.modality else None
@@ -361,6 +428,24 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-vision", action="store_true", help="skip rendering/tiling")
     add_vision_selection(sp)
     sp.set_defaults(func=_cmd_ingest_pdf)
+
+    sp = sub.add_parser(
+        "ingest-batch",
+        help="batch-ingest many documents from a manifest (fast path for large corpora)",
+    )
+    add_storage(sp)
+    sp.add_argument("--manifest", required=True,
+                    help="JSON array or JSONL file; each object has doc_id + "
+                         "text/html and optional image_paths")
+    sp.add_argument("--batch-size", type=int, default=128,
+                    help="units per embedding batch (default 128)")
+    sp.add_argument("--workers", type=int, default=1,
+                    help="threads preparing documents while batches embed (default 1)")
+    sp.add_argument("--replace", action="store_true",
+                    help="upsert: delete existing units for each doc_id before adding")
+    add_vision_selection(sp)
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_ingest_batch)
 
     sp = sub.add_parser("richness", help="score a page's visual richness and the index decision")
     sp.add_argument("--file", help="text or .html file to score (pre-render signal)")
