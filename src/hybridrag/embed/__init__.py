@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from ..config import HybridConfig
 from .base import (
+    BatchedVisionEmbedder,
     HashTextEmbedder,
     HashVisionEmbedder,
     TextEmbedder,
@@ -28,14 +29,29 @@ def build_text_embedder(config: HybridConfig) -> TextEmbedder:
 def build_vision_embedder(config: HybridConfig) -> VisionEmbedder:
     if config.vision_model == "hash":
         return HashVisionEmbedder(dim=config.vision_dim)
+    batch = config.vision_encode_batch_size
+    if "qwen" in config.vision_model.lower():
+        from .qwen_vl import QwenVLVisionEmbedder
+
+        return QwenVLVisionEmbedder(
+            model_name=config.vision_model,
+            device=config.vision_device,
+            precision=config.vision_precision,
+            encode_batch_size=batch,
+        )
     from .vision import VLMVisionEmbedder
 
-    return VLMVisionEmbedder(model_name=config.vision_model)
+    return VLMVisionEmbedder(
+        model_name=config.vision_model,
+        device=config.vision_device,
+        encode_batch_size=batch,
+    )
 
 
 __all__ = [
     "TextEmbedder",
     "VisionEmbedder",
+    "BatchedVisionEmbedder",
     "HashTextEmbedder",
     "HashVisionEmbedder",
     "build_text_embedder",

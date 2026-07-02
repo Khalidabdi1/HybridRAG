@@ -24,10 +24,16 @@ class HybridConfig:
     text_dim: int = 384  # embedding dim for the fallback hashing encoder
 
     # ---- vision pipeline ----
-    vision_model: str = "hash"  # "hash" (fallback) or a transformers VLM id
+    vision_model: str = "hash"  # "hash" (fallback), a Qwen-VL id, or a CLIP/SigLIP id
     tile_height: int = 512  # px height of each tile
     tile_overlap: int = 64  # px overlap between vertical tiles
     vision_dim: int = 512  # embedding dim for the fallback hashing encoder
+    # Model-level micro-batch: max tiles/queries pushed through the VLM in one
+    # forward pass. Bounds peak GPU memory regardless of how many units an
+    # ``encode()`` call receives (distinct from the ingest buffer flush size).
+    vision_encode_batch_size: int = 16
+    vision_precision: str = "auto"  # "auto" | "fp32" | "fp16" | "bf16" (CUDA autocast)
+    vision_device: str = "auto"  # "auto" | "cpu" | "cuda" | "mps"
 
     # ---- rendering ----
     viewport_width: int = 1280

@@ -98,3 +98,9 @@ hybridrag stats     --storage .idx
   server and CLI must point at the same directory to share an index.
 - Vision ingestion (`ingest-url`, `ingest-pdf`) needs the `[render]` extra
   (Playwright + PyMuPDF); text and HTML indexing run on numpy alone.
+- Real vision embeddings are opt-in (`[vision]` extra). Set `vision_model` to a
+  Qwen-VL id (e.g. `Qwen/Qwen2-VL-2B-Instruct` — any id containing "qwen" routes
+  to the batched `QwenVLVisionEmbedder`) or a CLIP/SigLIP id. `vision_encode_batch_size`
+  caps how many tiles hit the GPU per forward pass; `vision_precision`
+  (`auto`/`fp16`/`bf16`) enables CUDA autocast. Without these, the deterministic
+  `hash` encoder keeps everything runnable on numpy alone.
