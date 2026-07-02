@@ -376,11 +376,39 @@ hybridrag search --storage idx --query "cloud revenue growth" --rerank
 #  2. [text] doc=d2 score=0.0000 (text=0.0164 rerank=0.0000)
 ```
 
-### 5. Pluggable encoders
+### 5. Pluggable encoders — incl. a batched Qwen-VL adapter
 Everything implements `TextEmbedder` / `VisionEmbedder`
 ([`embed/base.py`](src/hybridrag/embed/base.py)). The default `hash` encoders are
 deterministic and dependency-free (great for tests and demos); the real
 `sentence-transformers` and VLM backends drop in by changing one config string.
+
+The vision path ships two real adapters, both built on a
+`BatchedVisionEmbedder` base so a single `encode()` call — the ingest layer hands
+it hundreds of tiles at once — is transparently split into **GPU-memory-bounded
+mini-batches** instead of one forward pass that would OOM:
+
+- [`embed/qwen_vl.py`](src/hybridrag/embed/qwen_vl.py) — `QwenVLVisionEmbedder`
+  targets the **Qwen-VL family** (Qwen2-VL / Qwen2.5-VL). It uses the model's
+  `get_image_features`/`get_text_features` heads when present, otherwise runs the
+  backbone and **attention-mask mean-pools** the last hidden state into one
+  vector. Auto-selects cuda/mps/cpu and runs **fp16/bf16 autocast** on CUDA.
+- [`embed/vision.py`](src/hybridrag/embed/vision.py) — `VLMVisionEmbedder` for
+  CLIP / SigLIP style checkpoints, same batched base.
+
+```python
+cfg = HybridConfig(
+    vision_model="Qwen/Qwen2-VL-2B-Instruct",  # id containing "qwen" routes here
+    vision_encode_batch_size=16,               # tiles per GPU forward pass
+    vision_precision="bf16",                   # "auto" | "fp32" | "fp16" | "bf16"
+    vision_device="auto",                      # "auto" | "cuda" | "mps" | "cpu"
+)
+```
+
+Note the two levels of batching that keep large-corpus indexing fast **and**
+safe: `ingest-batch` buffers prepared units *across documents* (throughput),
+while `vision_encode_batch_size` caps how many of those units hit the VLM at once
+(peak memory). Install the backend with `pip install -e ".[vision]"`; the core
+still runs on numpy alone via the `hash` fallback.
 
 ### 6. Selective pixel indexing (ingest-time)
 Pixel RAG's two worst costs — **storage** and **GPU** — both scale with the
@@ -507,8 +535,10 @@ ruff check .
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Near-term: a real Qwen-VL embedding adapter with
-batched GPU inference. [Batched ingestion](#8-batched-ingestion-large-corpora) —
+See [ROADMAP.md](ROADMAP.md). The [Qwen-VL embedding
+adapter](#5-pluggable-encoders--incl-a-batched-qwen-vl-adapter) with batched GPU
+inference — memory-bounded mini-batching, fp16/bf16 autocast, auto device — landed
+in v0.10. [Batched ingestion](#8-batched-ingestion-large-corpora) —
 buffer-and-batch embedding with parallel document prep — landed in v0.9.
 [Answer synthesis](#7-answer-synthesis-the-final-readout)
 — a grounded, cited readout with a dependency-free extractive default and a

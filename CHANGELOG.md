@@ -3,6 +3,35 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.10.0] - 2026-07-02
+### Added
+- **Qwen-VL embedding adapter with batched GPU inference** (`hybridrag.embed.qwen_vl`)
+  — the vision path's reference encoder, plus the memory-bounded batching every
+  real VLM needs. The ingest layer already buffers hundreds of tiles per
+  `encode()` call, but the old embedder ran them through the model in a *single*
+  forward pass — the shape that OOMs a GPU on a large corpus.
+  - `QwenVLVisionEmbedder` targets the **Qwen-VL family** (Qwen2-VL /
+    Qwen2.5-VL): it uses the model's `get_image_features`/`get_text_features`
+    heads when present and otherwise runs the backbone and **attention-mask
+    mean-pools** the last hidden state into one L2-normalized vector — the
+    standard way to pull an embedding out of a VLM with no pooling head.
+  - New `BatchedVisionEmbedder` base (`hybridrag.embed.base`) splits any
+    `encode()` / `encode_query()` call into `vision_encode_batch_size`
+    mini-batches, concatenating results **in input order**, so peak GPU memory is
+    bounded by the micro-batch rather than the corpus. The CLIP/SigLIP
+    `VLMVisionEmbedder` was refactored onto the same base, so it gets
+    micro-batching for free.
+  - Auto device selection (cuda → mps → cpu) and **fp16/bf16 autocast** on CUDA,
+    controlled by `vision_precision` (`"auto"`/`"fp32"`/`"fp16"`/`"bf16"`) and
+    `vision_device`. `bf16` is preferred where the GPU supports it.
+  - Config: `vision_encode_batch_size` (default 16), `vision_precision`,
+    `vision_device`. The `build_vision_embedder` factory routes any `vision_model`
+    id containing `"qwen"` to the new adapter, everything else to the CLIP wrapper.
+  - Runs on **numpy alone**: the torch/transformers backend is an opt-in
+    `[vision]` extra, and the batching loop is unit-tested with a numpy fake
+    (`tests/test_qwen_vl.py`) — batch-size caps, input-order preservation,
+    single-pass equivalence, empty input, factory routing, and config round-trip.
+
 ## [0.9.0] - 2026-07-01
 ### Added
 - **Batched & parallel ingestion for large corpora** (`hybridrag.pipeline.ingest`)

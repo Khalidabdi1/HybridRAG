@@ -89,8 +89,20 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       and a `hybridrag_add_batch` MCP tool. Directly attacks disadvantage #2
       (slow indexing). Runs on numpy alone.
 
+## Done (v0.10.0)
+- [x] **Qwen-VL embedding adapter with batched GPU inference**
+      (`hybridrag.embed.qwen_vl`) — `QwenVLVisionEmbedder` targets the Qwen-VL
+      family (Qwen2-VL / Qwen2.5-VL), using the model's
+      `get_image_features`/`get_text_features` heads when present and otherwise
+      attention-mask mean-pooling the backbone's last hidden state. A reusable
+      `BatchedVisionEmbedder` base splits any `encode()` call into
+      `vision_encode_batch_size` mini-batches so peak GPU memory is bounded by the
+      micro-batch, not the corpus (the CLIP/SigLIP `VLMVisionEmbedder` now shares
+      it too). Auto device (cuda/mps/cpu) and fp16/bf16 autocast on CUDA via
+      `vision_precision` / `vision_device`. The factory routes any `vision_model`
+      id containing "qwen" here. Batching loop tested on numpy alone.
+
 ## Next
-- [ ] **Qwen-VL embedding adapter** with batched GPU inference.
 - [ ] **Benchmarks & screenshots** from a real corpus in the README.
 
 ## Ideas / research
