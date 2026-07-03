@@ -3,6 +3,34 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.10.0] - 2026-07-03
+### Added
+- **Qwen-VL embedding adapter with batched GPU inference**
+  (`hybridrag.embed.vision`) — makes the vision modality real with the same
+  model family pixel-only systems are built on, and directly softens
+  disadvantage #6 (lock-in to one VLM) and #4 (GPU cost).
+  - **`QwenVLEmbedder`.** Targets the Qwen2-VL / GME embedding family (e.g.
+    `Alibaba-NLP/gme-Qwen2-VL-2B-Instruct`) via `get_image_embeddings` /
+    `get_text_embeddings`, mapping an **instruction-prefixed** text query and a
+    page image into one shared space. Adapts to the signature variance across
+    GME checkpoints (keyword `images=`/`texts=`+`instruction=`, positional
+    fallback) and casts to fp16 on CUDA.
+  - **`BatchedVisionEmbedder`.** Both vision backends now subclass it and
+    implement per-batch `_encode_images` / `_encode_texts`; the base slices
+    input into `vision_batch_size` chunks, encodes each, concatenates in input
+    order, and L2-normalizes once. Batched output is **identical, row-for-row**,
+    to a single un-chunked call — batching only bounds GPU memory on long pages
+    and large query sets, it never changes results. `iter_batches` helper.
+  - **`VLMVisionEmbedder`** (CLIP-style dual-head) refactored onto the same
+    batched base; both wrappers take a `batch_size`.
+  - **Backend selection.** `vision_backend` config (`auto`/`clip`/`qwen`) with
+    an `auto` heuristic that picks the Qwen-VL adapter when the model id mentions
+    `qwen`/`gme`, else the CLIP wrapper. New config: `vision_backend`,
+    `vision_batch_size`, `vision_query_instruction`.
+  - **Tests.** The batching machinery (chunking, order preservation,
+    normalization, empty inputs) and backend resolution are covered by
+    numpy-only tests via a fake recording embedder — no torch required.
+
 ## [0.9.0] - 2026-07-01
 ### Added
 - **Batched & parallel ingestion for large corpora** (`hybridrag.pipeline.ingest`)

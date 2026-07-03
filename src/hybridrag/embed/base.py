@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import re
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import Iterator, List, Sequence
 
 import numpy as np
 
@@ -25,6 +25,21 @@ def normalize(matrix: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
     return matrix / norms
+
+
+def iter_batches(items: Sequence, batch_size: int) -> Iterator[List]:
+    """Yield successive ``batch_size``-sized slices of ``items``.
+
+    A non-positive ``batch_size`` yields the whole sequence as one batch (no
+    batching). Used to bound how many tiles/queries a GPU encoder holds at once.
+    """
+    seq = list(items)
+    if batch_size <= 0:
+        if seq:
+            yield seq
+        return
+    for start in range(0, len(seq), batch_size):
+        yield seq[start : start + batch_size]
 
 
 class TextEmbedder(ABC):
@@ -53,6 +68,43 @@ class VisionEmbedder(ABC):
         VLM embedding models are trained so that a text query and a relevant
         image land close together; this method exposes that text-side encoder.
         """
+
+
+class BatchedVisionEmbedder(VisionEmbedder):
+    """A :class:`VisionEmbedder` that encodes in fixed-size mini-batches.
+
+    Real VLM encoders must bound how many tiles/queries live on the GPU at
+    once, or they OOM on large pages/corpora. Subclasses implement
+    :meth:`_encode_images` / :meth:`_encode_texts` over a *single* batch
+    (returning raw, un-normalized features); this base slices the input into
+    ``batch_size`` chunks, encodes each, concatenates in input order, and
+    L2-normalizes once at the end. Batched output is therefore identical to a
+    single hypothetical call — order and values are preserved.
+    """
+
+    batch_size: int = 16
+
+    def encode(self, image_paths: Sequence[str]) -> np.ndarray:
+        return self._run_batched(self._encode_images, image_paths)
+
+    def encode_query(self, texts: Sequence[str]) -> np.ndarray:
+        return self._run_batched(self._encode_texts, texts)
+
+    def _run_batched(self, fn, items: Sequence) -> np.ndarray:
+        seq = list(items)
+        if not seq:
+            return np.zeros((0, self.dim), dtype=np.float32)
+        parts = [np.asarray(fn(batch), dtype=np.float32)
+                 for batch in iter_batches(seq, self.batch_size)]
+        return normalize(np.concatenate(parts, axis=0))
+
+    @abstractmethod
+    def _encode_images(self, image_paths: Sequence[str]) -> np.ndarray:
+        """Encode one batch of image paths into raw ``(len(batch), dim)`` features."""
+
+    @abstractmethod
+    def _encode_texts(self, texts: Sequence[str]) -> np.ndarray:
+        """Encode one batch of query strings into raw ``(len(batch), dim)`` features."""
 
 
 def _hash_vector(token: str, dim: int) -> np.ndarray:

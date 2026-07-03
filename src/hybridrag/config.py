@@ -25,6 +25,13 @@ class HybridConfig:
 
     # ---- vision pipeline ----
     vision_model: str = "hash"  # "hash" (fallback) or a transformers VLM id
+    # Which real-VLM wrapper to build for a non-"hash" model. "auto" picks
+    # QwenVLEmbedder (GME / Qwen2-VL family) when the model id mentions "qwen"
+    # or "gme", else the CLIP-style VLMVisionEmbedder; force with "clip"/"qwen".
+    vision_backend: str = "auto"  # "auto" | "clip" | "qwen"
+    vision_batch_size: int = 16  # tiles/queries per GPU mini-batch on the real encoders
+    # Instruction prepended to text queries for GME/Qwen2-VL embedders.
+    vision_query_instruction: str = "Find a document page that answers the query."
     tile_height: int = 512  # px height of each tile
     tile_overlap: int = 64  # px overlap between vertical tiles
     vision_dim: int = 512  # embedding dim for the fallback hashing encoder
