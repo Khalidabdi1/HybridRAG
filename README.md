@@ -130,7 +130,22 @@ Then point the config at real models:
 ```python
 cfg = HybridConfig(
     text_model="sentence-transformers/all-MiniLM-L6-v2",
-    vision_model="openai/clip-vit-base-patch32",   # or a Qwen-VL embedding model
+    vision_model="openai/clip-vit-base-patch32",   # CLIP-style dual-head VLM
+)
+rag = HybridRAG(cfg)
+```
+
+Or a **Qwen2-VL embedding model** (the GME family) — the same retrieval backbone
+pixel-only systems use. The backend is picked automatically from the model id
+(any id mentioning `qwen`/`gme` → the Qwen-VL adapter), and tiles/queries are
+encoded in GPU mini-batches to bound memory on large pages:
+
+```python
+cfg = HybridConfig(
+    vision_model="Alibaba-NLP/gme-Qwen2-VL-2B-Instruct",  # → QwenVLEmbedder (auto)
+    vision_batch_size=8,                                   # tiles/queries per GPU batch
+    vision_query_instruction="Find a document page that answers the query.",
+    # vision_backend="qwen",  # force the backend if the id doesn't signal it
 )
 rag = HybridRAG(cfg)
 ```
@@ -381,6 +396,13 @@ Everything implements `TextEmbedder` / `VisionEmbedder`
 ([`embed/base.py`](src/hybridrag/embed/base.py)). The default `hash` encoders are
 deterministic and dependency-free (great for tests and demos); the real
 `sentence-transformers` and VLM backends drop in by changing one config string.
+Two vision backends ship: `VLMVisionEmbedder` for CLIP-style dual-head models
+and `QwenVLEmbedder` for the Qwen2-VL / GME family, both subclassing
+`BatchedVisionEmbedder` so image tiles and text queries are encoded in
+`vision_batch_size` GPU mini-batches — batched output is identical, row-for-row,
+to a single un-chunked call, so batching never changes results, only memory.
+This is what keeps the design from locking into one VLM: swap CLIP for Qwen-VL
+by changing `vision_model`, and the backend is selected automatically.
 
 ### 6. Selective pixel indexing (ingest-time)
 Pixel RAG's two worst costs — **storage** and **GPU** — both scale with the
@@ -507,8 +529,11 @@ ruff check .
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Near-term: a real Qwen-VL embedding adapter with
-batched GPU inference. [Batched ingestion](#8-batched-ingestion-large-corpora) —
+See [ROADMAP.md](ROADMAP.md). Near-term: benchmarks & screenshots from a real
+corpus, and a learned query router. The [Qwen-VL embedding adapter with batched
+GPU inference](#5-pluggable-encoders) — a `QwenVLEmbedder` for the Qwen2-VL / GME
+family plus a `BatchedVisionEmbedder` base shared by both vision backends —
+landed in v0.10. [Batched ingestion](#8-batched-ingestion-large-corpora) —
 buffer-and-batch embedding with parallel document prep — landed in v0.9.
 [Answer synthesis](#7-answer-synthesis-the-final-readout)
 — a grounded, cited readout with a dependency-free extractive default and a
