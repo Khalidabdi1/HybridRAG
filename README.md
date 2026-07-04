@@ -176,6 +176,10 @@ hybridrag ingest-batch --storage .idx --manifest corpus.jsonl --batch-size 128 -
 # Inspect the selective-indexing decision for a page (no index needed)
 hybridrag richness   --file page.html        #  -> INDEX or SKIP pixels + why
 
+# Inspect / train the query router (per-query text vs vision weighting)
+hybridrag route      --query "which chart shows revenue" --model learned  # -> weights + P(vision)
+hybridrag train-router --examples queries.jsonl --out router.json         # fit on your query logs
+
 # Search (fused). Force a single modality with --modality text|vision
 hybridrag search     --storage .idx --query "quarterly revenue table" -k 5
 
@@ -238,6 +242,7 @@ The server exposes these tools over a persistent index (set by
 | `hybridrag_stats` | Report document count, index size, models, and dimensions. |
 | `hybridrag_cost` | Model storage + $/query per modality and project it to N pages. |
 | `hybridrag_richness` | Score a page's visual richness and decide if it earns the pixel path. |
+| `hybridrag_route` | Explain how the router splits a query across text/vision (with the learned `P(vision)`), without searching. |
 
 The bundled **skill** (`.claude/skills/hybridrag/`) is picked up automatically by
 Claude Code in this repo; it tells Claude to prefer text-only retrieval for code,
@@ -360,10 +365,33 @@ chunk never touches the pixel index, and vice versa.
 
 ### 2. The query router
 Before searching, [`retrieve/router.py`](src/hybridrag/retrieve/router.py) reads
-the query for cues — `code`, `stack trace`, `json`, `{ } ;` lean **text**;
-`chart`, `table`, `diagram`, `layout` lean **vision** — and returns per-modality
-weights. It never hard-disables a modality (recall is preserved); it shifts
-emphasis so you don't pay GPU cost for a query that text answers better.
+the query and returns per-modality weights. It never hard-disables a modality
+(recall is preserved); it shifts emphasis so you don't pay GPU cost for a query
+that text answers better. Two routers ship, chosen with `router_model`:
+
+- **`heuristic`** (default) — hand-tuned keyword rules. `code`, `stack trace`,
+  `json`, `{ } ;` lean **text**; `chart`, `table`, `diagram`, `layout` lean
+  **vision**.
+- **`learned`** — a tiny **logistic-regression classifier** (numpy only) over
+  interpretable query features (text/vision cue densities, code structure,
+  numeric density, length). It ships **pre-trained** on an embedded seed set so
+  it works out of the box and outputs a calibrated `P(vision-relevant)` per
+  query. Because the *combination* of signals is learned rather than hard-coded,
+  you can **retrain it on your own query logs** — the whole point of a learned
+  router over fixed constants:
+
+  ```bash
+  hybridrag route --query "which chart shows the revenue table" --model learned
+  #  [learned] text_weight=0.364  vision_weight=1.636
+  #    learned: vision-leaning (p=0.95)
+
+  # fit on labelled queries ({query, label} where label = P(vision) in 0..1)
+  hybridrag train-router --examples queries.jsonl --out router.json
+  # then point the index at it: router_model="learned", router_weights_path="router.json"
+  ```
+
+  Training is deterministic (zero-init, full-batch gradient descent), so the
+  shipped weights are reproducible and every test runs on numpy alone.
 
 ### 3. Reciprocal Rank Fusion
 Cosine scores from a text encoder and a vision encoder are **not** comparable,
@@ -530,7 +558,9 @@ ruff check .
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md). Near-term: benchmarks & screenshots from a real
-corpus, and a learned query router. The [Qwen-VL embedding adapter with batched
+corpus. The [learned query router](#2-the-query-router) — a numpy
+logistic-regression classifier over query features, retrainable on your own
+query logs — landed in v0.11. The [Qwen-VL embedding adapter with batched
 GPU inference](#5-pluggable-encoders) — a `QwenVLEmbedder` for the Qwen2-VL / GME
 family plus a `BatchedVisionEmbedder` base shared by both vision backends —
 landed in v0.10. [Batched ingestion](#8-batched-ingestion-large-corpora) —

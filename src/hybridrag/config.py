@@ -55,6 +55,12 @@ class HybridConfig:
     text_weight: float = 1.0
     vision_weight: float = 1.0
     enable_router: bool = True  # let the router adjust per-query weights
+    # Which router decides the per-query weights. "heuristic" = hand-tuned
+    # keyword rules; "learned" = a numpy logistic-regression classifier over
+    # query features (ships pre-trained; retrain on your query logs). See
+    # hybridrag.retrieve.router.
+    router_model: str = "heuristic"  # "heuristic" | "learned"
+    router_weights_path: str = ""  # optional JSON of trained learned-router weights
 
     # ---- reranking ----
     enable_rerank: bool = False  # rerank the fused candidate set before returning

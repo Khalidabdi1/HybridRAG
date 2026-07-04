@@ -3,6 +3,39 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.11.0] - 2026-07-04
+### Added
+- **Learned query router** (`hybridrag.retrieve.router`) — a small
+  **logistic-regression classifier** that replaces the hand-tuned keyword
+  weights, the top open roadmap item. Directly sharpens disadvantage #4 (GPU
+  cost): a better router sends fewer queries down the expensive vision path.
+  - **`LearnedRouter`.** Predicts a calibrated `P(vision-relevant)` from
+    `extract_features(query)` — interpretable, embedding-free signals
+    (text/vision cue densities, code structure, numeric-token density, query
+    length) — and maps it to per-modality weights that never zero a modality
+    (recall preserved). Ships **pre-trained** on an embedded, human-labelled seed
+    set (`DEFAULT_TRAINING_EXAMPLES`) so it works out of the box.
+  - **Deterministic training.** `fit()` runs full-batch gradient descent on
+    cross-entropy with L2, initialised at zero — no random seed — so the default
+    weights are reproducible and the whole thing runs on **numpy alone**.
+    `save()` / `load()` / `to_dict()` / `from_dict()` persist trained weights.
+  - **Unlike fixed constants, it's retrainable** on your own labelled query logs
+    — the point of a learned router.
+  - **`HeuristicRouter`** wraps the original `route()` behind the same interface;
+    `build_router(config)` selects between them. `route()` and `RouteDecision`
+    stay backward-compatible (`RouteDecision.vision_probability` is the only new,
+    optional field).
+  - **Config.** `router_model` (`"heuristic"` / `"learned"`),
+    `router_weights_path` (load trained weights).
+  - **Surfaces.** `hybridrag route` (inspect a query's weights) and
+    `hybridrag train-router` (fit + save) CLI commands; a `hybridrag_route` MCP
+    tool that explains the split without searching. Engine routes through
+    `self.router`.
+  - **Tests.** `tests/test_learned_router.py` covers feature extraction, training
+    determinism, seed-set separation, weight mapping, persistence round-trip,
+    `build_router`, and engine wiring; plus `hybridrag_route` MCP tests. Full
+    suite: **160 passed, 3 skipped**; `ruff` clean. Runs on numpy alone.
+
 ## [0.10.0] - 2026-07-03
 ### Added
 - **Qwen-VL embedding adapter with batched GPU inference**
