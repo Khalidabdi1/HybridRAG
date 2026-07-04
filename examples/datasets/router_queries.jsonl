@@ -1,0 +1,12 @@
+{"query": "how do I fix this python stack trace exception", "label": 0.0}
+{"query": "parse the json config and validate the schema", "label": 0.0}
+{"query": "grep the logs for the error message", "label": 0.0}
+{"query": "which sql query joins these two tables by id", "label": 0.05}
+{"query": "summarise the terms of service paragraph", "label": 0.15}
+{"query": "which chart shows the revenue trend over time", "label": 1.0}
+{"query": "read the value in the third row of the table", "label": 1.0}
+{"query": "what colour is the largest slice of the pie chart", "label": 1.0}
+{"query": "describe the layout of the dashboard screenshot", "label": 1.0}
+{"query": "find the figure that shows the architecture diagram", "label": 0.95}
+{"query": "show the json config and the diagram of the api", "label": 0.5}
+{"query": "what were the quarterly revenue numbers", "label": 0.55}

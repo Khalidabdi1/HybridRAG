@@ -154,6 +154,32 @@ def test_add_batch_tool_validates(engine):
         call_tool("hybridrag_add_batch", {"documents": [{"doc_id": "x"}]}, engine=engine)
 
 
+def test_route_tool_heuristic(engine):
+    out = call_tool(
+        "hybridrag_route",
+        {"query": "which chart shows the revenue table", "model": "heuristic"},
+        engine=engine,
+    )
+    assert out["router_model"] == "heuristic"
+    assert out["vision_weight"] > out["text_weight"]
+
+
+def test_route_tool_learned_exposes_probability(engine):
+    out = call_tool(
+        "hybridrag_route",
+        {"query": "fix the json stack trace exception", "model": "learned"},
+        engine=engine,
+    )
+    assert out["router_model"] == "learned"
+    assert out["vision_probability"] < 0.5
+    assert out["text_weight"] > out["vision_weight"]
+
+
+def test_route_tool_requires_query(engine):
+    with pytest.raises(ValueError):
+        call_tool("hybridrag_route", {}, engine=engine)
+
+
 def test_unknown_tool_raises(engine):
     with pytest.raises(KeyError):
         call_tool("nope", {}, engine=engine)

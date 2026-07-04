@@ -27,7 +27,7 @@ from .pipeline.extract import chunk_text, html_to_text
 from .pipeline.select import SelectionDecision, build_selector
 from .retrieve.fusion import reciprocal_rank_fusion
 from .retrieve.rerank import build_reranker, rerank_results
-from .retrieve.router import route
+from .retrieve.router import build_router
 from .synth.reader import Answer, Reader, build_reader
 from .types import Chunk, Modality, SearchResult, Tile
 
@@ -42,6 +42,7 @@ class HybridRAG:
         self.reranker = build_reranker(self.config)
         self.selector = build_selector(self.config)
         self.reader = build_reader(self.config)
+        self.router = build_router(self.config)
 
     # ------------------------------------------------------------------ ingest
     def add_chunks(self, chunks: List[Chunk]) -> int:
@@ -220,7 +221,9 @@ class HybridRAG:
             reranker = build_reranker(self.config.with_overrides(enable_rerank=True))
 
         if self.config.enable_router and modality is None:
-            decision = route(query, self.config.text_weight, self.config.vision_weight)
+            decision = self.router.route(
+                query, self.config.text_weight, self.config.vision_weight
+            )
             weights = decision.weights()
         else:
             weights = {

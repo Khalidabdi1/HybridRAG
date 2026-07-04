@@ -371,6 +371,54 @@ def _cmd_richness(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_route(args: argparse.Namespace) -> int:
+    from .retrieve.router import HeuristicRouter, LearnedRouter
+
+    if args.model == "learned":
+        router = (
+            LearnedRouter.load(args.weights) if args.weights else LearnedRouter.default()
+        )
+    else:
+        router = HeuristicRouter()
+    decision = router.route(args.query)
+    if args.json:
+        print(json.dumps(decision.to_dict(), indent=2))
+        return 0
+    print(
+        f"[{router.model}] text_weight={decision.text_weight:.3f}  "
+        f"vision_weight={decision.vision_weight:.3f}"
+    )
+    print(f"  {decision.reason}")
+    return 0
+
+
+def _cmd_train_router(args: argparse.Namespace) -> int:
+    from .retrieve.router import DEFAULT_TRAINING_EXAMPLES, LearnedRouter
+
+    if args.examples:
+        examples = []
+        for row in _read_manifest(args.examples):
+            q = row.get("query")
+            label = row.get("label", row.get("vision_label"))
+            if q is None or label is None:
+                raise ValueError("each example needs `query` and `label` (0..1)")
+            examples.append((q, float(label)))
+    else:
+        examples = list(DEFAULT_TRAINING_EXAMPLES)
+
+    router = LearnedRouter().fit(examples, iterations=args.iterations, lr=args.lr)
+    router.save(args.out)
+    print(
+        f"Trained learned router on {len(examples)} example(s) -> {args.out}"
+    )
+    weights = {n: round(float(w), 4) for n, w in zip(
+        ["bias", "text_cue", "vision_cue", "codeish", "numeric", "length"],
+        router.weights,
+    )}
+    print(f"  weights: {weights}")
+    return 0
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -508,6 +556,24 @@ def build_parser() -> argparse.ArgumentParser:
                     help="corpus size to project storage to (default 10,000,000)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_cost)
+
+    sp = sub.add_parser("route", help="show the per-query modality weights the router picks")
+    sp.add_argument("--query", required=True)
+    sp.add_argument("--model", default="heuristic", choices=["heuristic", "learned"],
+                    help="which router to inspect (default heuristic)")
+    sp.add_argument("--weights", help="trained learned-router weights JSON (for --model learned)")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_route)
+
+    sp = sub.add_parser("train-router",
+                        help="train the learned router on labelled queries and save its weights")
+    sp.add_argument("--examples",
+                    help="JSON array or JSONL of {query, label} (label=P(vision) in 0..1); "
+                         "omit to train on the built-in seed set")
+    sp.add_argument("--out", default="router.json", help="where to write the trained weights")
+    sp.add_argument("--iterations", type=int, default=4000)
+    sp.add_argument("--lr", type=float, default=0.5)
+    sp.set_defaults(func=_cmd_train_router)
 
     sp = sub.add_parser("serve", help="serve a search API (needs [serve])")
     add_storage(sp)

@@ -24,8 +24,9 @@ models are opt-in.
   `hybridrag_search`, `hybridrag_answer`, `hybridrag_add_text`,
   `hybridrag_add_html`, `hybridrag_add_batch`, `hybridrag_update_text`,
   `hybridrag_delete`, `hybridrag_list_docs`, `hybridrag_stats`,
-  `hybridrag_cost`, and `hybridrag_richness`. Configured via `.mcp.json`; the
-  index lives in `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
+  `hybridrag_cost`, `hybridrag_richness`, and `hybridrag_route`. Configured via
+  `.mcp.json`; the index lives in `$HYBRIDRAG_STORAGE` (default
+  `.hybridrag_index`).
 - **CLI** — for screenshot/PDF ingestion and serving, which need extra
   dependencies.
 
@@ -73,6 +74,18 @@ code/log page should not be pixel-indexed while a financial-table page should.
 The `pixel_selection` config knob (`auto`/`always`/`never`) and the
 `--vision-selection` CLI flag control the policy at ingest time.
 
+**The query router.** By default `hybridrag_search`/`hybridrag_answer` let a
+router weight text vs vision per query (never zeroing a modality, so recall is
+preserved). Two routers exist: the default `heuristic` keyword rules, and a
+`learned` numpy logistic-regression classifier that outputs a calibrated
+`P(vision-relevant)`. Call `hybridrag_route` with a `query` (and optional
+`model: "learned"`) to see how a query *would* be split — the per-modality
+weights and, for the learned router, the probability — without running a search.
+Use it to explain why a code/log/JSON query stays text-heavy while a
+chart/table/layout query pulls in pixels. Select the router for an index via the
+`router_model` config; retrain the learned router on your own labelled queries
+with `hybridrag train-router`.
+
 ## CLI reference
 
 ```bash
@@ -89,6 +102,8 @@ hybridrag list-docs --storage .idx
 hybridrag eval      --dataset examples/datasets/sample.json               # text vs vision vs hybrid
 hybridrag cost      --storage .idx --project-pages 10000000               # storage + $/query model
 hybridrag richness  --file page.html                                      # selective-indexing verdict
+hybridrag route     --query "which chart shows revenue" --model learned    # per-query modality weights
+hybridrag train-router --examples queries.jsonl --out router.json          # fit the learned router
 hybridrag stats     --storage .idx
 ```
 

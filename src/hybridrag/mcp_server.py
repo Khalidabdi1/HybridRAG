@@ -268,6 +268,30 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "hybridrag_route",
+        "description": (
+            "Explain how the query router would split a query across the text "
+            "and pixel (vision) modalities, WITHOUT running a search. Returns the "
+            "per-modality weights and, for the learned router, the calibrated "
+            "P(vision-relevant). Use this to reason about why a code/log/JSON "
+            "query stays text-heavy while a chart/table/layout query pulls in "
+            "pixels. Set `model` to 'learned' for the trained classifier or "
+            "'heuristic' for the keyword rules (default: the index config)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural-language query to route."},
+                "model": {
+                    "type": "string",
+                    "enum": ["heuristic", "learned"],
+                    "description": "Which router to use (default: the index config).",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "hybridrag_richness",
         "description": (
             "Score how visually rich a page is (tables, charts, figures, dense "
@@ -408,6 +432,28 @@ def _tool_cost(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _tool_route(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    from .retrieve.router import HeuristicRouter, LearnedRouter, build_router
+
+    query = args.get("query", "")
+    if not query:
+        raise ValueError("`query` is required")
+    model = args.get("model")
+    if model == "learned":
+        router = LearnedRouter.default()
+    elif model == "heuristic":
+        router = HeuristicRouter()
+    else:
+        router = build_router(engine.config)
+    decision = router.route(
+        query, engine.config.text_weight, engine.config.vision_weight
+    )
+    out = decision.to_dict()
+    out["router_model"] = getattr(router, "model", "heuristic")
+    out["query"] = query
+    return out
+
+
 def _tool_richness(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     from .pipeline.select import PixelSelector
 
@@ -429,6 +475,7 @@ def _tool_richness(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
 _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_search": _tool_search,
     "hybridrag_answer": _tool_answer,
+    "hybridrag_route": _tool_route,
     "hybridrag_richness": _tool_richness,
     "hybridrag_add_text": _tool_add_text,
     "hybridrag_add_html": _tool_add_html,

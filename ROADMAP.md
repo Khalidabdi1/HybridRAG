@@ -101,11 +101,23 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       selects the wrapper from the model id. Batching machinery + backend
       selection are covered by numpy-only tests.
 
+## Done (v0.11.0)
+- [x] **Learned router** (`hybridrag.retrieve.router`) — a numpy
+      logistic-regression classifier (`LearnedRouter`) that replaces the
+      hand-tuned keyword weights. Predicts a calibrated `P(vision-relevant)` from
+      interpretable, embedding-free query features (text/vision cue densities,
+      code structure, numeric density, length) and maps it to per-modality
+      weights without ever zeroing a modality. Ships pre-trained on an embedded
+      seed set (deterministic, zero-init gradient descent) and is **retrainable
+      on your own query logs** via `fit()` / `hybridrag train-router`.
+      `HeuristicRouter` keeps the original rules behind the same interface;
+      `build_router` + `router_model`/`router_weights_path` config select one.
+      `hybridrag route` CLI and a `hybridrag_route` MCP tool inspect the split.
+
 ## Next
 - [ ] **Benchmarks & screenshots** from a real corpus in the README.
-- [ ] **Learned router** (small classifier) instead of keyword heuristics.
 
 ## Ideas / research
-- Learned router (small classifier) instead of keyword heuristics.
 - Score-calibrated fusion as an alternative to RRF.
 - Tile-level deduplication to cut storage further.
+- Grow the router's training set / add features from real query logs.
