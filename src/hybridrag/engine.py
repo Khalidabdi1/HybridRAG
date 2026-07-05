@@ -23,6 +23,7 @@ from typing import List, Optional
 from .config import HybridConfig
 from .embed import build_text_embedder, build_vision_embedder
 from .index import VectorStore
+from .pipeline.dedup import DedupStats, build_deduplicator
 from .pipeline.extract import chunk_text, html_to_text
 from .pipeline.select import SelectionDecision, build_selector
 from .retrieve.fusion import reciprocal_rank_fusion
@@ -43,6 +44,11 @@ class HybridRAG:
         self.selector = build_selector(self.config)
         self.reader = build_reader(self.config)
         self.router = build_router(self.config)
+        self.deduplicator = build_deduplicator(self.config)
+        # Most recent dedup pass (from add_tiles) and running totals for stats.
+        self.last_dedup: Optional[DedupStats] = None
+        self._dedup_tiles_removed = 0
+        self._dedup_bytes_saved = 0
 
     # ------------------------------------------------------------------ ingest
     def add_chunks(self, chunks: List[Chunk]) -> int:
@@ -66,6 +72,13 @@ class HybridRAG:
     def add_tiles(self, tiles: List[Tile]) -> int:
         if not tiles:
             return 0
+        if self.deduplicator is not None:
+            tiles, dedup = self.deduplicator.deduplicate(tiles)
+            self.last_dedup = dedup
+            self._dedup_tiles_removed += dedup.duplicate_tiles
+            self._dedup_bytes_saved += dedup.bytes_saved
+        else:
+            self.last_dedup = None
         paths = [t.image_path or t.id for t in tiles]
         vectors = self.vision_embedder.encode(paths)
         metas = [
@@ -337,4 +350,7 @@ class HybridRAG:
             "vision_model": self.config.vision_model,
             "text_dim": self.text_embedder.dim,
             "vision_dim": self.vision_embedder.dim,
+            "tile_dedup": self.config.tile_dedup,
+            "tiles_deduplicated": self._dedup_tiles_removed,
+            "dedup_bytes_saved": self._dedup_bytes_saved,
         }

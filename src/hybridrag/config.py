@@ -36,6 +36,17 @@ class HybridConfig:
     tile_overlap: int = 64  # px overlap between vertical tiles
     vision_dim: int = 512  # embedding dim for the fallback hashing encoder
 
+    # ---- tile deduplication ----
+    # Repeated tiles (a document's header/footer/logo band on every page, blank
+    # margins) are byte-identical. Collapsing them to one embedded + stored
+    # record cuts vector/artifact storage (disadvantage #1) and VLM inference
+    # (disadvantage #4). "doc" (default) only collapses tiles within a single
+    # doc_id, which keeps delete-by-doc correct; "global" collapses across
+    # documents for the maximum saving; "off" disables it. See
+    # hybridrag.pipeline.dedup.
+    tile_dedup: str = "doc"  # "doc" | "global" | "off"
+    tile_dedup_method: str = "exact"  # "exact" (byte hash) | "ahash" (perceptual)
+
     # ---- rendering ----
     viewport_width: int = 1280
     render_scale: float = 1.0

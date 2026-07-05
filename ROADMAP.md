@@ -114,10 +114,24 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       `build_router` + `router_model`/`router_weights_path` config select one.
       `hybridrag route` CLI and a `hybridrag_route` MCP tool inspect the split.
 
+## Done (v0.12.0)
+- [x] **Tile-level deduplication** (`hybridrag.pipeline.dedup`) — collapse
+      content-identical tiles (a document's repeating header/footer/logo band,
+      blank margins) to one embedded + stored representative, cutting vector +
+      artifact storage (disadvantage #1) and VLM inference (disadvantage #4).
+      A `TileDeduplicator` content-hashes tiles (exact byte hash, or perceptual
+      `ahash` for re-encoded copies) and records every duplicate as
+      `occurrences` metadata on the rep so citations still resolve to each page.
+      Scoped per `doc_id` by default so delete-by-doc stays correct; `"global"`
+      collapses across docs. Wired into `add_tiles` (`tile_dedup` config,
+      default on), reported by `BatchIngestor` and `stats()`, with a `hybridrag
+      dedup` CLI and a `hybridrag_dedup` MCP tool. Runs on numpy alone.
+
 ## Next
 - [ ] **Benchmarks & screenshots** from a real corpus in the README.
 
 ## Ideas / research
 - Score-calibrated fusion as an alternative to RRF.
-- Tile-level deduplication to cut storage further.
+- Cross-document tile dedup with store-level reference counting (safe deletes
+  under `scope="global"`).
 - Grow the router's training set / add features from real query logs.

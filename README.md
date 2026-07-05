@@ -176,6 +176,10 @@ hybridrag ingest-batch --storage .idx --manifest corpus.jsonl --batch-size 128 -
 # Inspect the selective-indexing decision for a page (no index needed)
 hybridrag richness   --file page.html        #  -> INDEX or SKIP pixels + why
 
+# Analyse rendered tiles for content duplicates (repeated headers/footers/logos)
+# and see the storage + GPU a dedup would save — before you embed anything.
+hybridrag dedup      --dir .idx/tiles        #  -> "1200 tiles -> 340 unique (72% saved)"
+
 # Inspect / train the query router (per-query text vs vision weighting)
 hybridrag route      --query "which chart shows revenue" --model learned  # -> weights + P(vision)
 hybridrag train-router --examples queries.jsonl --out router.json         # fit on your query logs
@@ -243,6 +247,7 @@ The server exposes these tools over a persistent index (set by
 | `hybridrag_cost` | Model storage + $/query per modality and project it to N pages. |
 | `hybridrag_richness` | Score a page's visual richness and decide if it earns the pixel path. |
 | `hybridrag_route` | Explain how the router splits a query across text/vision (with the learned `P(vision)`), without searching. |
+| `hybridrag_dedup` | Analyse tile images for content duplicates; report unique vs duplicate tiles and the storage/GPU a dedup saves. |
 
 The bundled **skill** (`.claude/skills/hybridrag/`) is picked up automatically by
 Claude Code in this repo; it tells Claude to prefer text-only retrieval for code,
@@ -461,7 +466,39 @@ hybridrag richness --text "def foo(): return 1"       # SKIP pixels (score≈0.0
 hybridrag richness --file quarterly_report.html       # INDEX pixels (score≈0.95) — it's a table
 ```
 
-### 7. Answer synthesis (the "final readout")
+### 7. Tile deduplication (storage + GPU)
+Selective indexing decides *whether* a page earns the pixel path; deduplication
+attacks the pages that do. Tile a real document and a large fraction of the tiles
+are **byte-for-byte identical** — the running header, footer, logo band, or blank
+margin that repeats on every one of its pages. A 200-page report tiles into ~200
+copies of the same header, and embedding + storing each one is pure waste.
+[`pipeline/dedup.py`](src/hybridrag/pipeline/dedup.py) collapses them:
+
+- **Embed once, cite everywhere.** `TileDeduplicator` content-hashes each tile
+  and keeps a single representative per group; every other occurrence is recorded
+  on it as `meta["occurrences"]`, so a hit still resolves to *every* page the
+  tile appears on. One embedding and one stored record per unique tile → less
+  vector + artifact storage (disadvantage #1) and fewer VLM forward passes
+  (disadvantage #4).
+- **Deletes stay correct.** Scope is per-`doc_id` by default, so a representative
+  is never shared across documents and `delete(doc_id)` compacts cleanly. Flip to
+  `tile_dedup="global"` to also fold identical tiles *across* documents (shared
+  brand logos) when you don't delete individual docs.
+- **Exact or perceptual.** `"exact"` (default) SHA-256s the tile bytes — no
+  dependencies. `"ahash"` folds visually-identical but byte-different copies
+  (re-encoded PNGs, format changes) via an 8×8 average hash.
+
+It's on by default (`tile_dedup="doc"`) and runs inside `add_tiles`, so batched
+ingestion and every render path benefit for free; non-duplicated tiles pass
+through untouched. Estimate the win on already-rendered tiles first:
+
+```bash
+hybridrag dedup --dir .idx/tiles
+#  1200 tile(s) -> 340 unique (860 duplicate, 71.7% saved) across 6 repeated group(s)
+#    method=exact scope=doc  est. artifact storage saved ~168.0 MB
+```
+
+### 8. Answer synthesis (the "final readout")
 Retrieval returns passages; a RAG system has to *read* them and answer. In Pixel
 RAG that readout always means a VLM call over screenshots — the single most
 expensive step. HybridRAG makes the readout a **pluggable** step with a cheap,
@@ -494,7 +531,7 @@ ans = rag.answer("summarise the revenue chart", reader=LLMReader(claude))
 hybridrag answer --storage .idx --query "what was Q3 revenue?"
 ```
 
-### 8. Batched ingestion (large corpora)
+### 9. Batched ingestion (large corpora)
 Indexing is Pixel/Hybrid RAG's slowest phase: every page is extracted, chunked,
 optionally rendered + tiled, then embedded. The naive path embeds **one document
 at a time** — an `encode()` call per document — which throws away a real
@@ -533,7 +570,7 @@ src/hybridrag/
 ├── types.py            # Chunk, Tile, Document, SearchResult, Modality
 ├── embed/              # text & vision encoders (+ hashing fallback)
 ├── index/              # VectorStore (numpy / FAISS)
-├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile) + select (selective pixel indexing) + ingest (batched/parallel)
+├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile) + select (selective pixel indexing) + dedup (tile deduplication) + ingest (batched/parallel)
 ├── retrieve/           # router (per-query weights) + fusion (RRF) + rerank (BM25/cross-encoder)
 ├── synth/              # answer synthesis: extractive (no deps) + LLM/VLM reader (the "final readout")
 ├── eval/               # metrics, datasets, harness, cost model (text vs vision vs hybrid)

@@ -80,6 +80,7 @@ class IngestStats:
     documents: int = 0
     chunks_added: int = 0
     tiles_added: int = 0
+    tiles_deduplicated: int = 0  # tiles dropped as content-duplicates before embedding
     vision_skipped: int = 0  # docs whose images were skipped by pixel selection
     text_batches: int = 0
     vision_batches: int = 0
@@ -94,6 +95,7 @@ class IngestStats:
             "documents": self.documents,
             "chunks_added": self.chunks_added,
             "tiles_added": self.tiles_added,
+            "tiles_deduplicated": self.tiles_deduplicated,
             "vision_skipped": self.vision_skipped,
             "text_batches": self.text_batches,
             "vision_batches": self.vision_batches,
@@ -205,6 +207,9 @@ class BatchIngestor:
         if not buf:
             return
         stats.tiles_added += self.engine.add_tiles(buf)
+        last = getattr(self.engine, "last_dedup", None)
+        if last is not None:
+            stats.tiles_deduplicated += last.duplicate_tiles
         stats.vision_batches += 1
         buf.clear()
 
