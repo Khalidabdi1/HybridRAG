@@ -24,9 +24,9 @@ models are opt-in.
   `hybridrag_search`, `hybridrag_answer`, `hybridrag_add_text`,
   `hybridrag_add_html`, `hybridrag_add_batch`, `hybridrag_update_text`,
   `hybridrag_delete`, `hybridrag_list_docs`, `hybridrag_stats`,
-  `hybridrag_cost`, `hybridrag_richness`, and `hybridrag_route`. Configured via
-  `.mcp.json`; the index lives in `$HYBRIDRAG_STORAGE` (default
-  `.hybridrag_index`).
+  `hybridrag_cost`, `hybridrag_richness`, `hybridrag_route`, and
+  `hybridrag_dedup`. Configured via `.mcp.json`; the index lives in
+  `$HYBRIDRAG_STORAGE` (default `.hybridrag_index`).
 - **CLI** — for screenshot/PDF ingestion and serving, which need extra
   dependencies.
 
@@ -74,6 +74,17 @@ code/log page should not be pixel-indexed while a financial-table page should.
 The `pixel_selection` config knob (`auto`/`always`/`never`) and the
 `--vision-selection` CLI flag control the policy at ingest time.
 
+**Tile deduplication.** A document's repeating header/footer/logo band tiles into
+one byte-identical copy per page, so HybridRAG deduplicates tiles before
+embedding — each unique tile is embedded and stored once (cutting vision storage
+*and* VLM inference), with every duplicate recorded as `occurrences` metadata so
+citations still resolve to each page. It is on by default (`tile_dedup` config:
+`doc`/`global`/`off`) and runs inside ingestion. To estimate the saving on
+already-rendered tiles, call `hybridrag_dedup` with `image_paths` (or run
+`hybridrag dedup --dir <tiles>`): it reports unique vs duplicate tiles, the dedup
+ratio, and bytes saved, without indexing anything. Use it to quantify the storage
+argument for pixel-heavy corpora.
+
 **The query router.** By default `hybridrag_search`/`hybridrag_answer` let a
 router weight text vs vision per query (never zeroing a modality, so recall is
 preserved). Two routers exist: the default `heuristic` keyword rules, and a
@@ -102,6 +113,7 @@ hybridrag list-docs --storage .idx
 hybridrag eval      --dataset examples/datasets/sample.json               # text vs vision vs hybrid
 hybridrag cost      --storage .idx --project-pages 10000000               # storage + $/query model
 hybridrag richness  --file page.html                                      # selective-indexing verdict
+hybridrag dedup     --dir .idx/tiles                                      # tile duplicates + storage saved
 hybridrag route     --query "which chart shows revenue" --model learned    # per-query modality weights
 hybridrag train-router --examples queries.jsonl --out router.json          # fit the learned router
 hybridrag stats     --storage .idx

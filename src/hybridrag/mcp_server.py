@@ -292,6 +292,43 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "hybridrag_dedup",
+        "description": (
+            "Analyse a set of rendered page/tile images for content duplicates "
+            "and report how much vision storage and VLM inference tile-level "
+            "deduplication would save. Repeated tiles (a document's header/footer/"
+            "logo band on every page, blank margins) are byte-identical, so each "
+            "unique tile only needs to be embedded and stored once. Pass "
+            "`image_paths` (a list of tile PNG paths); `method` 'exact' (byte "
+            "hash) or 'ahash' (perceptual, folds re-encoded copies); `scope` "
+            "'doc' (collapse within each document, keeps delete-by-doc correct) "
+            "or 'global' (collapse across documents). Returns unique vs duplicate "
+            "counts and estimated bytes saved. This directly quantifies the "
+            "storage argument (disadvantage #1) for pixel-heavy corpora."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "image_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tile/page image paths to analyse.",
+                },
+                "method": {
+                    "type": "string",
+                    "enum": ["exact", "ahash"],
+                    "description": "Byte-exact (default) or perceptual average-hash matching.",
+                },
+                "scope": {
+                    "type": "string",
+                    "enum": ["doc", "global"],
+                    "description": "Collapse within each doc_id (default) or across all docs.",
+                },
+            },
+            "required": ["image_paths"],
+        },
+    },
+    {
         "name": "hybridrag_richness",
         "description": (
             "Score how visually rich a page is (tables, charts, figures, dense "
@@ -454,6 +491,20 @@ def _tool_route(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _tool_dedup(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
+    from .pipeline.dedup import TileDeduplicator, tiles_from_paths
+
+    image_paths = args.get("image_paths")
+    if not image_paths or not isinstance(image_paths, list):
+        raise ValueError("`image_paths` must be a non-empty list")
+    dedup = TileDeduplicator(
+        method=args.get("method") or "exact",
+        scope=args.get("scope") or "doc",
+    )
+    _unique, stats = dedup.deduplicate(tiles_from_paths([str(p) for p in image_paths]))
+    return stats.to_dict()
+
+
 def _tool_richness(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     from .pipeline.select import PixelSelector
 
@@ -477,6 +528,7 @@ _HANDLERS: Dict[str, Callable[[HybridRAG, Dict[str, Any]], Dict[str, Any]]] = {
     "hybridrag_answer": _tool_answer,
     "hybridrag_route": _tool_route,
     "hybridrag_richness": _tool_richness,
+    "hybridrag_dedup": _tool_dedup,
     "hybridrag_add_text": _tool_add_text,
     "hybridrag_add_html": _tool_add_html,
     "hybridrag_add_batch": _tool_add_batch,

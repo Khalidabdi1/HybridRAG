@@ -371,6 +371,38 @@ def _cmd_richness(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_dedup(args: argparse.Namespace) -> int:
+    from .pipeline.dedup import TileDeduplicator, scan_tiles, tiles_from_paths
+
+    if args.dir:
+        tiles = scan_tiles(args.dir)
+    elif args.images:
+        tiles = tiles_from_paths(args.images)
+    else:
+        print("Provide --dir or --images.", file=sys.stderr)
+        return 2
+    dedup = TileDeduplicator(method=args.method, scope=args.scope, tile_bytes=args.tile_bytes)
+    _unique, stats = dedup.deduplicate(tiles)
+    d = stats.to_dict()
+    if args.json:
+        print(json.dumps(d, indent=2))
+        return 0
+    if d["input_tiles"] == 0:
+        print("No tiles found.")
+        return 0
+    saved_mb = d["bytes_saved"] / (1024 * 1024)
+    print(
+        f"{d['input_tiles']} tile(s) -> {d['unique_tiles']} unique "
+        f"({d['duplicate_tiles']} duplicate, {d['dedup_ratio'] * 100:.1f}% saved) "
+        f"across {d['groups_with_duplicates']} repeated group(s)"
+    )
+    print(
+        f"  method={d['method']} scope={d['scope']}  "
+        f"est. artifact storage saved ~{saved_mb:.1f} MB"
+    )
+    return 0
+
+
 def _cmd_route(args: argparse.Namespace) -> int:
     from .retrieve.router import HeuristicRouter, LearnedRouter
 
@@ -556,6 +588,21 @@ def build_parser() -> argparse.ArgumentParser:
                     help="corpus size to project storage to (default 10,000,000)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_cost)
+
+    sp = sub.add_parser(
+        "dedup",
+        help="analyse rendered tiles for content duplicates (storage/GPU a dedup would save)",
+    )
+    sp.add_argument("--dir", help="directory of rendered tile images to scan (recursive)")
+    sp.add_argument("--images", nargs="+", help="explicit tile image paths instead of --dir")
+    sp.add_argument("--method", default="exact", choices=["exact", "ahash"],
+                    help="exact byte hash (default) or perceptual average-hash (needs Pillow)")
+    sp.add_argument("--scope", default="doc", choices=["doc", "global"],
+                    help="collapse within each doc_id (default) or across all documents")
+    sp.add_argument("--tile-bytes", type=int, default=200_000,
+                    help="assumed bytes per tile file for the storage-saved estimate")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=_cmd_dedup)
 
     sp = sub.add_parser("route", help="show the per-query modality weights the router picks")
     sp.add_argument("--query", required=True)

@@ -3,6 +3,39 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.12.0] - 2026-07-05
+### Added
+- **Tile-level deduplication** (`hybridrag.pipeline.dedup`) — collapse
+  content-identical image tiles to a single embedded + stored representative,
+  directly attacking the storage bill (disadvantage #1) and VLM inference cost
+  (disadvantage #4). A document's running header/footer/logo band tiles into one
+  identical copy per page; embedding and storing each one is waste.
+  - **`TileDeduplicator`.** Content-hashes every tile and keeps one
+    representative per group; each other occurrence is recorded on the rep as
+    `meta["occurrences"]` (+ `duplicate_count`), so citations still resolve to
+    every page the tile appears on. Returns a `DedupStats` (input/unique/
+    duplicate counts, dedup ratio, estimated bytes saved).
+  - **Scope keeps deletes correct.** `scope="doc"` (default) only collapses
+    tiles within a single `doc_id`, so a representative is never shared across
+    documents and `delete(doc_id)` stays clean; `scope="global"` collapses
+    across documents for the maximum saving.
+  - **Exact and perceptual matching.** `method="exact"` (default) SHA-256s the
+    tile bytes — no dependencies; `method="ahash"` folds visually-identical but
+    byte-different copies (re-encoded PNGs, format changes) via an 8×8 average
+    hash (needs Pillow, degrades gracefully to exact). Path-less/metadata-only
+    tiles always stay distinct.
+  - **Wired through ingestion.** `HybridRAG.add_tiles()` deduplicates before
+    embedding when `tile_dedup` is on (default `"doc"`); `BatchIngestor` reports
+    `tiles_deduplicated`; `stats()` surfaces cumulative `tiles_deduplicated` and
+    `dedup_bytes_saved`. Non-duplicated tiles pass through untouched, so search,
+    fusion, rerank, and delete are unchanged.
+  - **Config.** `tile_dedup` (`"doc"` / `"global"` / `"off"`),
+    `tile_dedup_method` (`"exact"` / `"ahash"`).
+  - **Surfaces.** `hybridrag dedup --dir <tiles>` (dry-run analysis of rendered
+    tiles: unique vs duplicate, storage saved) and a `hybridrag_dedup` MCP tool.
+  - Fully covered by numpy-only tests (`tests/test_dedup.py`); the perceptual
+    path is Pillow-gated like the rest of the vision suite.
+
 ## [0.11.0] - 2026-07-04
 ### Added
 - **Learned query router** (`hybridrag.retrieve.router`) — a small
