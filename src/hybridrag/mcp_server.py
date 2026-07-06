@@ -87,6 +87,15 @@ TOOL_SPECS: List[Dict[str, Any]] = [
                         "index configuration."
                     ),
                 },
+                "fusion": {
+                    "type": "string",
+                    "enum": ["rrf", "calibrated"],
+                    "description": (
+                        "Optional: fusion strategy. 'rrf' fuses on rank alone; "
+                        "'calibrated' normalizes and combines raw scores, keeping "
+                        "confidence magnitude. Defaults to the index configuration."
+                    ),
+                },
             },
             "required": ["query"],
         },
@@ -371,7 +380,10 @@ def _tool_search(engine: HybridRAG, args: Dict[str, Any]) -> Dict[str, Any]:
     if args.get("modality"):
         modality = Modality(args["modality"])
     rerank = args.get("rerank")
-    results = engine.search(query, top_k=top_k, modality=modality, rerank=rerank)
+    fusion = args.get("fusion")
+    results = engine.search(
+        query, top_k=top_k, modality=modality, rerank=rerank, fusion=fusion
+    )
     return {
         "query": query,
         "count": len(results),

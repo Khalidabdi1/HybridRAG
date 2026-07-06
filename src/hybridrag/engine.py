@@ -26,7 +26,7 @@ from .index import VectorStore
 from .pipeline.dedup import DedupStats, build_deduplicator
 from .pipeline.extract import chunk_text, html_to_text
 from .pipeline.select import SelectionDecision, build_selector
-from .retrieve.fusion import reciprocal_rank_fusion
+from .retrieve.fusion import fuse
 from .retrieve.rerank import build_reranker, rerank_results
 from .retrieve.router import build_router
 from .synth.reader import Answer, Reader, build_reader
@@ -219,6 +219,7 @@ class HybridRAG:
         top_k: Optional[int] = None,
         modality: Optional[Modality] = None,
         rerank: Optional[bool] = None,
+        fusion: Optional[str] = None,
     ) -> List[SearchResult]:
         """Search both modalities and fuse. ``modality`` forces a single one.
 
@@ -226,6 +227,9 @@ class HybridRAG:
         a deeper fused candidate set is built and re-scored against the query by
         :func:`hybridrag.retrieve.rerank.rerank_results` before the top ``k`` are
         returned. Pass ``rerank=False`` to force it off for one query.
+
+        ``fusion`` overrides ``config.fusion_method`` for one query
+        (``"rrf"`` or ``"calibrated"``).
         """
         top_k = top_k or self.config.top_k
         use_rerank = self.config.enable_rerank if rerank is None else rerank
@@ -286,8 +290,14 @@ class HybridRAG:
                 for s, m in hits
             ]
 
-        fused = reciprocal_rank_fusion(
-            ranked, weights, rrf_k=self.config.rrf_k, top_k=fuse_k
+        fused = fuse(
+            ranked,
+            weights,
+            method=fusion or self.config.fusion_method,
+            top_k=fuse_k,
+            rrf_k=self.config.rrf_k,
+            norm=self.config.fusion_norm,
+            softmax_temp=self.config.fusion_softmax_temp,
         )
         if reranker is not None:
             fused = rerank_results(
@@ -303,6 +313,7 @@ class HybridRAG:
         modality: Optional[Modality] = None,
         rerank: Optional[bool] = None,
         reader: Optional[Reader] = None,
+        fusion: Optional[str] = None,
     ) -> Answer:
         """Retrieve, then synthesize a grounded, cited answer (the RAG readout).
 
@@ -319,7 +330,9 @@ class HybridRAG:
         if reader is None:
             reader = build_reader(self.config.with_overrides(reader_model="extractive"))
         fetch = top_k or self.config.answer_top_k
-        results = self.search(query, top_k=fetch, modality=modality, rerank=rerank)
+        results = self.search(
+            query, top_k=fetch, modality=modality, rerank=rerank, fusion=fusion
+        )
         return reader.synthesize(query, results)
 
     # ------------------------------------------------------------- persistence

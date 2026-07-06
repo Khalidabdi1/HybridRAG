@@ -62,7 +62,16 @@ class HybridConfig:
 
     # ---- retrieval / fusion ----
     top_k: int = 10
+    # How to combine the per-modality ranked lists. "rrf" (default) fuses on
+    # rank alone — robust when text and vision cosine scores are on different
+    # scales. "calibrated" normalizes each modality's raw scores onto a common
+    # [0,1] scale and combines them, preserving confidence magnitude and the
+    # gaps between hits. See hybridrag.retrieve.fusion.
+    fusion_method: str = "rrf"  # "rrf" | "calibrated"
     rrf_k: int = 60  # Reciprocal Rank Fusion constant
+    # Score normalization used by calibrated fusion.
+    fusion_norm: str = "minmax"  # "minmax" | "zscore" | "softmax"
+    fusion_softmax_temp: float = 0.1  # temperature for the "softmax" norm
     text_weight: float = 1.0
     vision_weight: float = 1.0
     enable_router: bool = True  # let the router adjust per-query weights

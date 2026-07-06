@@ -127,11 +127,21 @@ HybridRAG is developed incrementally. This file tracks what exists and what's ne
       default on), reported by `BatchIngestor` and `stats()`, with a `hybridrag
       dedup` CLI and a `hybridrag_dedup` MCP tool. Runs on numpy alone.
 
+## Done (v0.13.0)
+- [x] **Score-calibrated fusion** (`hybridrag.retrieve.fusion`) — an alternative
+      to Reciprocal Rank Fusion that keeps *confidence magnitude*. RRF fuses on
+      rank alone; calibrated fusion normalizes each modality's raw scores onto a
+      common `[0, 1]` scale (`minmax` / `zscore` / `softmax`) and combines them,
+      so a confident match outranks a lukewarm one and the gap between hits
+      survives. A `fuse(method=...)` dispatcher, `fusion_method` / `fusion_norm`
+      / `fusion_softmax_temp` config, `search(fusion=...)` / `answer(fusion=...)`,
+      a `hybridrag search --fusion` CLI flag, and a `fusion` param on the
+      `hybridrag_search` MCP tool. Runs on numpy alone.
+
 ## Next
 - [ ] **Benchmarks & screenshots** from a real corpus in the README.
 
 ## Ideas / research
-- Score-calibrated fusion as an alternative to RRF.
 - Cross-document tile dedup with store-level reference counting (safe deletes
   under `scope="global"`).
 - Grow the router's training set / add features from real query logs.

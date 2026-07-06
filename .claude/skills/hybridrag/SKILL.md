@@ -43,7 +43,10 @@ models are opt-in.
    the router blend both. Prefer text-only for code, logs, and JSON. Pass
    `rerank: true` to re-score the fused candidates against the query (BM25 /
    cross-encoder) for higher precision on keyword-specific questions; the chosen
-   hits then carry a `components.rerank` value.
+   hits then carry a `components.rerank` value. Pass `fusion: "calibrated"` to
+   fuse on normalized raw scores instead of rank (RRF) — this keeps confidence
+   magnitude, so a strongly-matching doc leads a weakly-matching one by more than
+   one rank; leave it unset for the default `rrf`.
 4. `hybridrag_update_text` / `hybridrag_delete` — when a source document
    changed or should be dropped, update or delete it by `doc_id` instead of
    rebuilding the index; only that document is re-embedded. `hybridrag_list_docs`

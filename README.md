@@ -67,7 +67,7 @@ A document flows down **two parallel pipelines**:
                          │ PIXEL:  render  → tile  → vision-embed → index │──┤
                          └───────────────────────────────────────────────┘  │
                                                                              ▼
-        Query ──► Router (per-modality weights) ──► search both ──► RRF Fusion ──► Rerank* ──► Reader* ──► Answer
+        Query ──► Router (per-modality weights) ──► search both ──► Fusion (RRF/calibrated) ──► Rerank* ──► Reader* ──► Answer
                                                                   (*optional BM25/cross-encoder)  (*extractive / LLM-VLM)
 ```
 
@@ -398,12 +398,31 @@ that text answers better. Two routers ship, chosen with `router_model`:
   Training is deterministic (zero-init, full-batch gradient descent), so the
   shipped weights are reproducible and every test runs on numpy alone.
 
-### 3. Reciprocal Rank Fusion
-Cosine scores from a text encoder and a vision encoder are **not** comparable,
-so [`retrieve/fusion.py`](src/hybridrag/retrieve/fusion.py) fuses by *rank*, not
-raw score: each list contributes `weight / (k + rank)` per document. Results are
-grouped by `doc_id`, so a document found by **both** modalities is reinforced,
-and every hit reports its per-modality `components` for transparency.
+### 3. Fusion (RRF or score-calibrated)
+Cosine scores from a text encoder and a vision encoder are **not** comparable, so
+the default fusion in [`retrieve/fusion.py`](src/hybridrag/retrieve/fusion.py)
+fuses by *rank*, not raw score — **Reciprocal Rank Fusion**: each list
+contributes `weight / (k + rank)` per document. Results are grouped by `doc_id`,
+so a document found by **both** modalities is reinforced, and every hit reports
+its per-modality `components` for transparency.
+
+RRF is robust but throws away *confidence*: a near-perfect top hit and a mediocre
+one an adjacent rank apart contribute almost the same. When your score
+distributions are informative and roughly stationary, switch to
+**score-calibrated fusion** (`fusion_method="calibrated"`, or `--fusion calibrated`
+per query). It normalizes each modality's raw scores onto a common `[0, 1]` scale
+(`fusion_norm`: `minmax` / `zscore` / `softmax`), then combines them — so a very
+confident match outranks a lukewarm one and the *gap* between hits survives:
+
+```text
+query "revenue growth financial", 3 docs (relevant / off-topic / off-topic)
+  RRF          d1=0.0167  d2=0.0164  d3=0.0161   ← rank-only: nearly tied
+  calibrated   d1=1.0000  d2=0.1548  d3=0.0000   ← the real confidence gap
+```
+
+```bash
+hybridrag search --storage idx --query "revenue growth financial" --fusion calibrated
+```
 
 ### 4. Reranking (optional)
 RRF fuses by *rank* and never reads the query and a document **together**, so it
@@ -571,7 +590,7 @@ src/hybridrag/
 ├── embed/              # text & vision encoders (+ hashing fallback)
 ├── index/              # VectorStore (numpy / FAISS)
 ├── pipeline/           # extract (HTML/PDF→text, chunk) + render (screenshot, tile) + select (selective pixel indexing) + dedup (tile deduplication) + ingest (batched/parallel)
-├── retrieve/           # router (per-query weights) + fusion (RRF) + rerank (BM25/cross-encoder)
+├── retrieve/           # router (per-query weights) + fusion (RRF/calibrated) + rerank (BM25/cross-encoder)
 ├── synth/              # answer synthesis: extractive (no deps) + LLM/VLM reader (the "final readout")
 ├── eval/               # metrics, datasets, harness, cost model (text vs vision vs hybrid)
 ├── serve/              # FastAPI search API

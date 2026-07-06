@@ -226,7 +226,8 @@ def _cmd_search(args: argparse.Namespace) -> int:
     engine = HybridRAG.load(args.storage)
     modality = Modality(args.modality) if args.modality else None
     results = engine.search(
-        args.query, top_k=args.k, modality=modality, rerank=args.rerank
+        args.query, top_k=args.k, modality=modality, rerank=args.rerank,
+        fusion=args.fusion,
     )
     if args.json:
         print(json.dumps([r.to_dict() for r in results], indent=2))
@@ -249,7 +250,8 @@ def _cmd_answer(args: argparse.Namespace) -> int:
     engine = HybridRAG.load(args.storage)
     modality = Modality(args.modality) if args.modality else None
     ans = engine.answer(
-        args.query, top_k=args.k, modality=modality, rerank=args.rerank
+        args.query, top_k=args.k, modality=modality, rerank=args.rerank,
+        fusion=args.fusion,
     )
     if args.json:
         print(json.dumps(ans.to_dict(), indent=2))
@@ -545,6 +547,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="rerank the fused candidates (BM25/cross-encoder) before returning")
     sp.add_argument("--no-rerank", dest="rerank", action="store_false",
                     help="disable reranking even if the index config enables it")
+    sp.add_argument("--fusion", choices=["rrf", "calibrated"], default=None,
+                    help="fusion strategy (default: the index config's fusion_method)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_search)
 
@@ -557,6 +561,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="rerank the fused candidates before synthesis")
     sp.add_argument("--no-rerank", dest="rerank", action="store_false",
                     help="disable reranking even if the index config enables it")
+    sp.add_argument("--fusion", choices=["rrf", "calibrated"], default=None,
+                    help="fusion strategy (default: the index config's fusion_method)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=_cmd_answer)
 
