@@ -3,6 +3,36 @@
 All notable changes to HybridRAG are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.13.0] - 2026-07-06
+### Added
+- **Score-calibrated fusion** (`hybridrag.retrieve.fusion`) — an alternative to
+  Reciprocal Rank Fusion that preserves *confidence magnitude*. RRF fuses on
+  rank alone, so a near-perfect top hit and a mediocre one an adjacent rank apart
+  contribute almost the same score. Calibrated fusion instead normalizes each
+  modality's raw similarity scores onto a common `[0, 1]` scale and combines the
+  calibrated scores with the per-modality weights, so the size of the gap between
+  hits survives fusion and a modality that is very confident about a document
+  pushes it up more than a lukewarm one.
+  - **`calibrated_fusion` + `fuse` dispatcher.** `fuse(ranked, weights,
+    method=...)` selects `"rrf"` (default) or `"calibrated"`; both group hits by
+    `doc_id` (reinforcing documents found by both modalities) and report
+    per-modality `components`. The representative unit for a calibrated doc is the
+    one with the largest single calibrated contribution.
+  - **Three normalizations** (`fusion_norm`): `minmax` (default, linear rescale;
+    degenerate all-equal lists map to `1.0`), `zscore` (standardize then logistic
+    squash into `(0, 1)`; zero-variance maps to `0.5`), and `softmax`
+    (temperature-scaled via `fusion_softmax_temp`). Every norm is bounded to
+    `[0, 1]` and order-preserving within a modality.
+  - **Config.** `fusion_method` (`"rrf"` / `"calibrated"`), `fusion_norm`
+    (`"minmax"` / `"zscore"` / `"softmax"`), `fusion_softmax_temp`.
+  - **Surfaces.** `HybridRAG.search(..., fusion=...)` and `answer(..., fusion=...)`
+    override the config per query; `hybridrag search --fusion rrf|calibrated`
+    (and the same on `hybridrag answer`); a `fusion` parameter on the
+    `hybridrag_search` MCP tool.
+  - Fully covered by numpy-only tests (`tests/test_fusion.py`): reinforcement of
+    agreeing modalities, confidence-gap preservation, bounded/ordered norms,
+    degenerate inputs, and dispatcher parity with the direct functions.
+
 ## [0.12.0] - 2026-07-05
 ### Added
 - **Tile-level deduplication** (`hybridrag.pipeline.dedup`) — collapse
